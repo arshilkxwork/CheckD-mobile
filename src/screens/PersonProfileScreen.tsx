@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,20 +12,26 @@ import { useTheme } from '../theme/ThemeContext';
 import { Avatar } from '../components/Avatar';
 import { NudgeCard } from '../components/NudgeCard';
 import { EmptyState } from '../components/EmptyState';
+import { CheerModal } from '../components/CheerModal';
+import { calculateStreak } from '../utils/insights';
 import { RELATIONSHIP_CONFIG } from '../theme/tokens';
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function PersonProfileScreen({ navigation, route }: any) {
   const { personId } = route.params;
-  const { people, nudges, history, completeNudge, snoozeNudge } = useApp();
+  const { people, nudges, history, completeNudge, snoozeNudge, sendCheer } = useApp();
   const { theme } = useTheme();
   const { colors, spacing, typography, fonts, radius, shadows } = theme;
+  const [cheerModalVisible, setCheerModalVisible] = useState(false);
 
   const person = people.find((p) => p.id === personId);
   if (!person) return null;
 
   const rel = person.relationship ? RELATIONSHIP_CONFIG[person.relationship] : null;
+
+  // Streak calculations
+  const streak = calculateStreak(history, nudges, personId);
 
   // Nudges sent to this person
   const personNudges = nudges.filter((n) => n.receiverId === personId);
@@ -80,24 +86,47 @@ export function PersonProfileScreen({ navigation, route }: any) {
               </Text>
             )}
           </View>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('CreateNudge')}
-            style={[
-              styles.nudgePersonBtn,
-              { backgroundColor: colors.accentLight, borderRadius: radius.full },
-            ]}
-          >
-            <Text style={[{ color: colors.accent, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
-              + Nudge
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => setCheerModalVisible(true)}
+              style={[
+                styles.nudgePersonBtn,
+                { backgroundColor: colors.honeyLight, borderRadius: radius.full },
+              ]}
+            >
+              <Text style={[{ color: colors.honey, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
+                🎉 Cheer
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('CreateNudge')}
+              style={[
+                styles.nudgePersonBtn,
+                { backgroundColor: colors.accentLight, borderRadius: radius.full },
+              ]}
+            >
+              <Text style={[{ color: colors.accent, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
+                + Nudge
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* This week */}
+        {/* This week & Streak */}
         <View style={[styles.sectionBox, { backgroundColor: colors.surface, borderRadius: radius.xxl, marginHorizontal: spacing.lg, ...shadows.sm }]}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
-            THIS WEEK
-          </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold, marginBottom: 0 }]}>
+              THIS WEEK • {streak.currentStreak}-DAY STREAK 🔥
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Insights', { personId: person.id })}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodySemibold }]}>
+                Insights →
+              </Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.weekRow}>
             {weekMap.map((day, i) => (
               <View key={i} style={styles.dayCol}>
@@ -172,6 +201,15 @@ export function PersonProfileScreen({ navigation, route }: any) {
           />
         )}
       </ScrollView>
+
+      {/* Cheer modal */}
+      <CheerModal
+        visible={cheerModalVisible}
+        onClose={() => setCheerModalVisible(false)}
+        people={people}
+        defaultPersonId={person.id}
+        onSendCheer={sendCheer}
+      />
     </SafeAreaView>
   );
 }
