@@ -103,6 +103,87 @@ export interface AppNotification {
   timestamp: string;
 }
 
+// ─── Insights & Streaks ───────────────────────────────────────────────────────
+
+export interface StreakInfo {
+  currentStreak: number;
+  longestStreak: number;
+  lastCompletedDate?: string;
+  completionRate: number; // 0 - 100 percentage
+  totalCompleted: number;
+  totalScheduled: number;
+}
+
+export interface WeeklyActivityDay {
+  day: string;
+  date: string;
+  completed: number;
+  total: number;
+  percentage: number;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+export interface PersonInsight {
+  personId: string;
+  personName: string;
+  avatarColor: string;
+  relationship?: RelationshipType;
+  streak: StreakInfo;
+  weeklyActivity: WeeklyActivityDay[];
+  topCategories: { category: NudgeCategory; count: number; percentage: number }[];
+  averageResponseMinutes: number;
+}
+
+export interface CareMilestone {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  category: NudgeCategory | 'general';
+  unlocked: boolean;
+  unlockedAt?: string;
+  current: number;
+  target: number;
+}
+
+// ─── Care Routines & Bundles ──────────────────────────────────────────────────
+
+export interface CareRoutineTemplateItem {
+  id: string;
+  category: NudgeCategory;
+  emoji: string;
+  title: string;
+  description?: string;
+  timeLabel: string;
+  scheduledTimeOffsetHours: number;
+  repeat: RepeatInterval;
+  reminderInterval: ReminderInterval;
+  proofType: ProofType;
+  accountabilityLevel: AccountabilityLevel;
+}
+
+export interface CareRoutineTemplate {
+  id: string;
+  title: string;
+  subtitle: string;
+  emoji: string;
+  badge: string;
+  badgeColor: string;
+  description: string;
+  recommendedFor: RelationshipType[];
+  items: CareRoutineTemplateItem[];
+}
+
+export interface Cheer {
+  id: string;
+  personId: string;
+  senderId: string;
+  emoji: string;
+  message: string;
+  timestamp: string;
+}
+
 // ─── App State ─────────────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -111,6 +192,8 @@ export interface AppState {
   nudges: Nudge[];
   history: HistoryEntry[];
   notifications: AppNotification[];
+  cheers: Cheer[];
   theme: ThemeMode;
   isOnboarded: boolean;
 }
+
