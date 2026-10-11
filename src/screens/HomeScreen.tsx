@@ -12,13 +12,16 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { NudgeCard } from '../components/NudgeCard';
 import { getGreeting } from '../utils/formatters';
+import { calculateStreak } from '../utils/insights';
 import { User } from '../types';
 
 export function HomeScreen({ navigation }: any) {
-  const { currentUser, nudges, people, completeNudge, snoozeNudge, unreadCount } = useApp();
+  const { currentUser, nudges, people, history, completeNudge, snoozeNudge, unreadCount } = useApp();
   const { theme } = useTheme();
   const { colors, spacing, typography, fonts, radius, shadows } = theme;
   const [refreshing, setRefreshing] = useState(false);
+
+  const streak = calculateStreak(history, nudges);
 
   const greeting = getGreeting();
   const hour = new Date().getHours();
@@ -70,6 +73,21 @@ export function HomeScreen({ navigation }: any) {
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity
+              onPress={() => navigation.navigate('Insights')}
+              activeOpacity={0.8}
+              style={[
+                styles.notifBtn,
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius.full,
+                  ...shadows.sm,
+                },
+              ]}
+              accessibilityLabel="View Care Insights"
+            >
+              <Text style={{ fontSize: 18 }}>📊</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               onPress={() => navigation.navigate('AllNudges')}
               activeOpacity={0.8}
               style={[
@@ -107,7 +125,7 @@ export function HomeScreen({ navigation }: any) {
 
         {/* ── Status banner ── */}
         {allDone && completedSent.length > 0 ? (
-          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.lg }}>
+          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
             <View
               style={[
                 styles.doneBanner,
@@ -124,7 +142,7 @@ export function HomeScreen({ navigation }: any) {
             </View>
           </View>
         ) : totalPending > 0 ? (
-          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.lg }}>
+          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
             <View
               style={[
                 styles.pendingBanner,
@@ -142,8 +160,53 @@ export function HomeScreen({ navigation }: any) {
           </View>
         ) : null}
 
-        {/* ── All Nudges quick link ── */}
-        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
+        {/* ── Streak & Insights Banner ── */}
+        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Insights')}
+            activeOpacity={0.88}
+            style={[
+              styles.streakBanner,
+              {
+                backgroundColor: colors.surface,
+                borderRadius: radius.xl,
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: spacing.md,
+                ...shadows.sm,
+              },
+            ]}
+          >
+            <View style={styles.streakBannerLeft}>
+              <View
+                style={[
+                  styles.streakIconCircle,
+                  { backgroundColor: streak.currentStreak >= 3 ? '#FDF3EC' : colors.accentLight, borderRadius: radius.full },
+                ]}
+              >
+                <Text style={{ fontSize: 22 }}>{streak.currentStreak >= 7 ? '👑' : '🔥'}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
+                    {streak.currentStreak}-Day Care Streak
+                  </Text>
+                  <View style={[styles.rateTag, { backgroundColor: colors.accentLight, borderRadius: radius.full }]}>
+                    <Text style={[{ color: colors.accent, fontSize: 10, fontFamily: fonts.bodyBold }]}>
+                      {streak.completionRate}% ON-TIME
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[{ color: colors.textSecondary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 2 }]}>
+                  View consistency stats, activity grid & badges →
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Quick Hub: All Nudges & Routines ── */}
+        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl, gap: 10 }}>
           <TouchableOpacity
             onPress={() => navigation.navigate('AllNudges')}
             activeOpacity={0.85}
@@ -168,6 +231,38 @@ export function HomeScreen({ navigation }: any) {
                 </Text>
                 <Text style={[{ color: colors.textTertiary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 2 }]}>
                   Search, filter & review across people
+                </Text>
+              </View>
+            </View>
+            <Text style={[{ color: colors.accent, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
+              →
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Routines')}
+            activeOpacity={0.85}
+            style={[
+              styles.allNudgesCard,
+              {
+                backgroundColor: colors.surface,
+                borderRadius: radius.xl,
+                borderWidth: 1,
+                borderColor: colors.border,
+                ...shadows.sm,
+              },
+            ]}
+          >
+            <View style={styles.allNudgesCardLeft}>
+              <View style={[styles.allNudgesIcon, { backgroundColor: colors.accentLight, borderRadius: radius.lg }]}>
+                <Text style={{ fontSize: 20 }}>🌿</Text>
+              </View>
+              <View>
+                <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
+                  Care Routine Templates
+                </Text>
+                <Text style={[{ color: colors.textTertiary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 2 }]}>
+                  1-tap bundles for parents, partners & kids
                 </Text>
               </View>
             </View>
@@ -366,5 +461,26 @@ const styles = StyleSheet.create({
     height: 42,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  streakBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  streakBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  streakIconCircle: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rateTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
 });
