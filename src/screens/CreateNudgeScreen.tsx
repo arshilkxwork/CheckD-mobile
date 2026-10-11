@@ -179,6 +179,7 @@ export function CreateNudgeScreen({ navigation }: any) {
             people={people}
             selected={selectedPerson}
             onSelect={setSelectedPerson}
+            onBrowseRoutines={() => navigation.navigate('Routines')}
             colors={colors}
             typography={typography}
             fonts={fonts}
@@ -276,7 +277,7 @@ export function CreateNudgeScreen({ navigation }: any) {
 }
 
 // ── Step: Who ──────────────────────────────────────────────────────────────────
-function StepWho({ people, selected, onSelect, colors, typography, fonts, radius, shadows }: any) {
+function StepWho({ people, selected, onSelect, onBrowseRoutines, colors, typography, fonts, radius, shadows, spacing }: any) {
   return (
     <View>
       <Text style={[styles.stepTitle, { color: colors.text, fontSize: typography.xxl, fontFamily: fonts.headingBold }]}>
@@ -285,6 +286,39 @@ function StepWho({ people, selected, onSelect, colors, typography, fonts, radius
       <Text style={[styles.stepSub, { color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body, lineHeight: typography.md * typography.lineHeightRelaxed }]}>
         Choose someone from your circle.
       </Text>
+
+      {onBrowseRoutines && (
+        <TouchableOpacity
+          onPress={onBrowseRoutines}
+          activeOpacity={0.85}
+          style={[
+            styles.routineCallout,
+            {
+              backgroundColor: colors.surfaceWarm,
+              borderRadius: radius.xl,
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: spacing?.md || 14,
+              marginBottom: spacing?.lg || 20,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              ...shadows.sm,
+            },
+          ]}
+        >
+          <Text style={{ fontSize: 24 }}>🌿</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
+              Want a complete care routine?
+            </Text>
+            <Text style={[{ color: colors.textSecondary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 1 }]}>
+              Browse 1-tap care templates for parents & partners →
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
       {people.map((p: User) => {
         const isSelected = selected?.id === p.id;
         const rel = p.relationship ? RELATIONSHIP_CONFIG[p.relationship] : null;
@@ -778,4 +812,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   nextBtnText: {},
+  routineCallout: {},
 });
