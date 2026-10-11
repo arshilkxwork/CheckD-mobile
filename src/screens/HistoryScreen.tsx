@@ -4,6 +4,7 @@ import {
   Text,
   SectionList,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
@@ -12,7 +13,7 @@ import { EmptyState } from '../components/EmptyState';
 import { formatDate, formatTime } from '../utils/formatters';
 import { HistoryEntry } from '../types';
 
-export function HistoryScreen() {
+export function HistoryScreen({ navigation }: any) {
   const { history, people, currentUser } = useApp();
   const { theme } = useTheme();
   const { colors, spacing, typography, fonts, radius, shadows } = theme;
@@ -58,12 +59,61 @@ export function HistoryScreen() {
         contentContainerStyle={{ paddingBottom: 56 }}
         ListHeaderComponent={
           <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-            <Text style={[styles.title, { color: colors.text, fontSize: typography.xxxl, fontFamily: fonts.headingBold }]}>
-              History
-            </Text>
-            <Text style={[{ color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body }]}>
-              A record of care ❤️
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View>
+                <Text style={[styles.title, { color: colors.text, fontSize: typography.xxxl, fontFamily: fonts.headingBold }]}>
+                  History
+                </Text>
+                <Text style={[{ color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body }]}>
+                  A record of care ❤️
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => navigation?.navigate('Insights')}
+                activeOpacity={0.8}
+                style={[
+                  styles.insightsBtn,
+                  { backgroundColor: colors.surfaceWarm, borderRadius: radius.full, ...shadows.sm },
+                ]}
+              >
+                <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
+                  Insights
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => navigation?.navigate('Insights')}
+              activeOpacity={0.85}
+              style={[
+                styles.insightsCallout,
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius.xl,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  marginTop: spacing.md,
+                  padding: spacing.md,
+                  ...shadows.sm,
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontSize: 20 }}>🔥</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[{ color: colors.text, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
+                    Care Continuity & Streaks
+                  </Text>
+                  <Text style={[{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.body, marginTop: 1 }]}>
+                    Review adherence rates, category breakdown & badges
+                  </Text>
+                </View>
+                <Text style={[{ color: colors.accent, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
+                  →
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -202,4 +252,11 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   historyRight: {},
+  insightsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  insightsCallout: {},
 });
