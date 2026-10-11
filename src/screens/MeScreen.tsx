@@ -105,6 +105,40 @@ export function MeScreen({ navigation }: any) {
         <SectionHeader label="Nudges & Habits" colors={colors} typography={typography} fonts={fonts} spacing={spacing} />
         <View style={[styles.card, { backgroundColor: colors.surface, borderRadius: radius.xxl, marginHorizontal: spacing.lg, ...shadows.sm }]}>
           <TouchableOpacity
+            onPress={() => navigation?.navigate('Insights')}
+            activeOpacity={0.75}
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: colors.divider }]}
+          >
+            <Text style={{ fontSize: 22 }}>📊</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[{ color: colors.text, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
+                Care Insights & Streaks
+              </Text>
+              <Text style={[{ color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body, marginTop: 2 }]}>
+                Track consistency, weekly adherence & unlocked badges
+              </Text>
+            </View>
+            <Text style={[{ color: colors.accent, fontSize: typography.lg, fontFamily: fonts.bodySemibold }]}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => navigation?.navigate('Routines')}
+            activeOpacity={0.75}
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: colors.divider }]}
+          >
+            <Text style={{ fontSize: 22 }}>🌿</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[{ color: colors.text, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
+                Care Routine Templates
+              </Text>
+              <Text style={[{ color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body, marginTop: 2 }]}>
+                Curated 1-tap habit bundles for parents & partners
+              </Text>
+            </View>
+            <Text style={[{ color: colors.accent, fontSize: typography.lg, fontFamily: fonts.bodySemibold }]}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             onPress={() => navigation?.navigate('AllNudges')}
             activeOpacity={0.75}
             style={styles.menuRow}
