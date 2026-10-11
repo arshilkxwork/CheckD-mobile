@@ -17,6 +17,8 @@ import { ReceiverNudgeScreen } from '../screens/ReceiverNudgeScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { AddPersonScreen } from '../screens/AddPersonScreen';
 import { AllNudgesScreen } from '../screens/AllNudgesScreen';
+import { InsightsScreen } from '../screens/InsightsScreen';
+import { RoutinesScreen } from '../screens/RoutinesScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -48,6 +50,8 @@ function HomeStack() {
   return (
     <Stack.Navigator id="HomeStack" screenOptions={{ headerShown: false, cardStyle: { backgroundColor: theme.colors.bg } }}>
       <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Insights" component={InsightsScreen} />
+      <Stack.Screen name="Routines" component={RoutinesScreen} />
       <Stack.Screen name="AllNudges" component={AllNudgesScreen} />
       <Stack.Screen name="NudgeDetail" component={NudgeDetailScreen} />
       <Stack.Screen name="ReceiverNudge" component={ReceiverNudgeScreen} options={{ presentation: 'modal' }} />
@@ -62,6 +66,7 @@ function PeopleStack() {
     <Stack.Navigator id="PeopleStack" screenOptions={{ headerShown: false, cardStyle: { backgroundColor: theme.colors.bg } }}>
       <Stack.Screen name="People" component={PeopleScreen} />
       <Stack.Screen name="PersonProfile" component={PersonProfileScreen} />
+      <Stack.Screen name="Insights" component={InsightsScreen} />
       <Stack.Screen name="AddPerson" component={AddPersonScreen} options={{ presentation: 'modal' }} />
     </Stack.Navigator>
   );
@@ -72,6 +77,7 @@ function CreateStack() {
   return (
     <Stack.Navigator id="CreateStack" screenOptions={{ headerShown: false, cardStyle: { backgroundColor: theme.colors.bg } }}>
       <Stack.Screen name="CreateNudge" component={CreateNudgeScreen} />
+      <Stack.Screen name="Routines" component={RoutinesScreen} />
     </Stack.Navigator>
   );
 }
@@ -81,6 +87,8 @@ function HistoryStack() {
   return (
     <Stack.Navigator id="HistoryStack" screenOptions={{ headerShown: false, cardStyle: { backgroundColor: theme.colors.bg } }}>
       <Stack.Screen name="History" component={HistoryScreen} />
+      <Stack.Screen name="Insights" component={InsightsScreen} />
+      <Stack.Screen name="NudgeDetail" component={NudgeDetailScreen} />
     </Stack.Navigator>
   );
 }
@@ -90,6 +98,8 @@ function MeStack() {
   return (
     <Stack.Navigator id="MeStack" screenOptions={{ headerShown: false, cardStyle: { backgroundColor: theme.colors.bg } }}>
       <Stack.Screen name="Me" component={MeScreen} />
+      <Stack.Screen name="Insights" component={InsightsScreen} />
+      <Stack.Screen name="Routines" component={RoutinesScreen} />
       <Stack.Screen name="AllNudges" component={AllNudgesScreen} />
       <Stack.Screen name="NudgeDetail" component={NudgeDetailScreen} />
     </Stack.Navigator>
