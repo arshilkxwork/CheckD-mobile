@@ -11,17 +11,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { NudgeCard } from '../components/NudgeCard';
+import { RefillAlertBanner } from '../components/RefillAlertBanner';
 import { getGreeting } from '../utils/formatters';
 import { calculateStreak } from '../utils/insights';
+import { isMedicationLowSupply } from '../utils/medications';
 import { User } from '../types';
 
 export function HomeScreen({ navigation }: any) {
-  const { currentUser, nudges, people, history, completeNudge, snoozeNudge, unreadCount } = useApp();
+  const {
+    currentUser,
+    nudges,
+    people,
+    history,
+    completeNudge,
+    snoozeNudge,
+    unreadCount,
+    medications,
+    refillMedication,
+  } = useApp();
   const { theme } = useTheme();
   const { colors, spacing, typography, fonts, radius, shadows } = theme;
   const [refreshing, setRefreshing] = useState(false);
 
   const streak = calculateStreak(history, nudges);
+  const lowMeds = medications.filter((m) => m.isActive && isMedicationLowSupply(m));
 
   const greeting = getGreeting();
   const hour = new Date().getHours();
@@ -72,6 +85,24 @@ export function HomeScreen({ navigation }: any) {
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Medications')}
+              activeOpacity={0.8}
+              style={[
+                styles.notifBtn,
+                {
+                  backgroundColor: colors.surface,
+                  borderRadius: radius.full,
+                  ...shadows.sm,
+                },
+              ]}
+              accessibilityLabel="View Care Cabinet"
+            >
+              <Text style={{ fontSize: 18 }}>💊</Text>
+              {lowMeds.length > 0 && (
+                <View style={[styles.badge, { backgroundColor: colors.accent, width: 8, height: 8, minWidth: 8, borderRadius: 4 }]} />
+              )}
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => navigation.navigate('Insights')}
               activeOpacity={0.8}
@@ -205,8 +236,61 @@ export function HomeScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ── Quick Hub: All Nudges & Routines ── */}
+        {/* ── Low Supply Refill Alert Banner ── */}
+        {lowMeds.length > 0 && (
+          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
+            <RefillAlertBanner
+              lowMeds={lowMeds}
+              people={people}
+              onPressManage={() => navigation.navigate('Medications')}
+              onPressQuickRefill={(med) => refillMedication(med.id, 30)}
+            />
+          </View>
+        )}
+
+        {/* ── Quick Hub: All Nudges, Care Cabinet & Routines ── */}
         <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl, gap: 10 }}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Medications')}
+            activeOpacity={0.85}
+            style={[
+              styles.allNudgesCard,
+              {
+                backgroundColor: colors.surface,
+                borderRadius: radius.xl,
+                borderWidth: 1,
+                borderColor: lowMeds.length > 0 ? '#FED7C3' : colors.border,
+                ...shadows.sm,
+              },
+            ]}
+          >
+            <View style={styles.allNudgesCardLeft}>
+              <View style={[styles.allNudgesIcon, { backgroundColor: lowMeds.length > 0 ? '#FFF0EB' : '#EEF5F0', borderRadius: radius.lg }]}>
+                <Text style={{ fontSize: 20 }}>💊</Text>
+              </View>
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
+                    Care Cabinet ({medications.length})
+                  </Text>
+                  {lowMeds.length > 0 && (
+                    <View style={[styles.rateTag, { backgroundColor: '#FEE5D8', borderRadius: radius.full }]}>
+                      <Text style={[{ color: colors.accentDark, fontSize: 10, fontFamily: fonts.bodyBold }]}>
+                        {lowMeds.length} REFILL NEEDED
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={[{ color: colors.textTertiary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 2 }]}>
+                  Prescription inventory, schedules & dose logs
+                </Text>
+              </View>
+            </View>
+            <Text style={[{ color: colors.accent, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
+              →
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={() => navigation.navigate('AllNudges')}
             activeOpacity={0.85}
