@@ -184,6 +184,66 @@ export interface Cheer {
   timestamp: string;
 }
 
+// ─── Care Cabinet & Medications ───────────────────────────────────────────────
+
+export type MedicationForm =
+  | 'tablet'
+  | 'capsule'
+  | 'liquid'
+  | 'drops'
+  | 'inhaler'
+  | 'injection'
+  | 'topical'
+  | 'spray'
+  | 'other';
+
+export type MedicationFrequency =
+  | 'once_daily'
+  | 'twice_daily'
+  | 'thrice_daily'
+  | 'as_needed'
+  | 'weekly';
+
+export interface Medication {
+  id: string;
+  personId: string;
+  name: string;
+  dosage: string;
+  form: MedicationForm;
+  color: string;
+  instructions: string;
+  frequency: MedicationFrequency;
+  times: string[];
+  currentSupply: number;
+  totalCapacity: number;
+  lowSupplyThreshold: number;
+  unit: string;
+  refillDate?: string;
+  prescribingDoctor?: string;
+  pharmacy?: string;
+  rxNumber?: string;
+  isActive: boolean;
+  adherenceRate: number;
+  lastTakenAt?: string;
+  createdAt: string;
+}
+
+export interface MedicationLog {
+  id: string;
+  medicationId: string;
+  personId: string;
+  takenAt: string;
+  status: 'taken' | 'skipped' | 'late';
+  notes?: string;
+}
+
+export interface MedicationSummaryStats {
+  totalActive: number;
+  lowSupplyCount: number;
+  dosesLoggedToday: number;
+  averageAdherence: number;
+}
+
 // ─── App State ─────────────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -193,7 +253,10 @@ export interface AppState {
   history: HistoryEntry[];
   notifications: AppNotification[];
   cheers: Cheer[];
+  medications: Medication[];
+  medicationLogs: MedicationLog[];
   theme: ThemeMode;
   isOnboarded: boolean;
 }
+
 
