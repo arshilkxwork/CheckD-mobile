@@ -12,11 +12,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
 import { Avatar } from '../components/Avatar';
+import { isMedicationLowSupply } from '../utils/medications';
 
 export function MeScreen({ navigation }: any) {
-  const { currentUser, setCurrentUser, nudges } = useApp();
+  const { currentUser, setCurrentUser, nudges, medications } = useApp();
   const { theme } = useTheme();
   const { colors, spacing, typography, fonts, radius, shadows } = theme;
+
+  const lowMeds = medications.filter((m) => m.isActive && isMedicationLowSupply(m));
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(currentUser.firstName);
@@ -133,6 +136,32 @@ export function MeScreen({ navigation }: any) {
               </Text>
               <Text style={[{ color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body, marginTop: 2 }]}>
                 Curated 1-tap habit bundles for parents & partners
+              </Text>
+            </View>
+            <Text style={[{ color: colors.accent, fontSize: typography.lg, fontFamily: fonts.bodySemibold }]}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => navigation?.navigate('Medications')}
+            activeOpacity={0.75}
+            style={[styles.menuRow, { borderBottomWidth: 1, borderBottomColor: colors.divider }]}
+          >
+            <Text style={{ fontSize: 22 }}>💊</Text>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[{ color: colors.text, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
+                  Care Cabinet & Medications
+                </Text>
+                {lowMeds.length > 0 && (
+                  <View style={{ backgroundColor: '#FEE5D8', borderRadius: radius.full, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ color: colors.accentDark, fontSize: 10, fontFamily: fonts.bodyBold }}>
+                      {lowMeds.length} REFILL NEEDED
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[{ color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body, marginTop: 2 }]}>
+                {medications.length} prescriptions • Pill supplies & refill tracking
               </Text>
             </View>
             <Text style={[{ color: colors.accent, fontSize: typography.lg, fontFamily: fonts.bodySemibold }]}>→</Text>
