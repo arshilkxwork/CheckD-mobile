@@ -14,13 +14,24 @@ import { NudgeCard } from '../components/NudgeCard';
 import { EmptyState } from '../components/EmptyState';
 import { CheerModal } from '../components/CheerModal';
 import { calculateStreak } from '../utils/insights';
+import { getFormEmoji, isMedicationLowSupply, wasDoseTakenToday } from '../utils/medications';
 import { RELATIONSHIP_CONFIG } from '../theme/tokens';
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function PersonProfileScreen({ navigation, route }: any) {
   const { personId } = route.params;
-  const { people, nudges, history, completeNudge, snoozeNudge, sendCheer } = useApp();
+  const {
+    people,
+    nudges,
+    history,
+    completeNudge,
+    snoozeNudge,
+    sendCheer,
+    medications,
+    logMedicationDose,
+    medicationLogs,
+  } = useApp();
   const { theme } = useTheme();
   const { colors, spacing, typography, fonts, radius, shadows } = theme;
   const [cheerModalVisible, setCheerModalVisible] = useState(false);
@@ -48,6 +59,7 @@ export function PersonProfileScreen({ navigation, route }: any) {
 
   // Week streak — mock based on history
   const personHistory = history.filter((h) => h.personId === personId);
+  const personMeds = medications.filter((m) => m.personId === personId);
   const todayIdx = new Date().getDay(); // 0 = Sun
   const weekMap = [0, 1, 2, 3, 4, 5, 6].map((dayOffset) => {
     const date = new Date();
@@ -156,6 +168,142 @@ export function PersonProfileScreen({ navigation, route }: any) {
           </View>
         </View>
 
+        {/* ── Care Cabinet / Active Prescriptions ── */}
+        <View
+          style={[
+            styles.sectionBox,
+            {
+              backgroundColor: colors.surface,
+              borderRadius: radius.xxl,
+              marginHorizontal: spacing.lg,
+              marginTop: spacing.md,
+              ...shadows.sm,
+            },
+          ]}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 16 }}>💊</Text>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold, marginBottom: 0 },
+                ]}
+              >
+                CARE CABINET ({personMeds.length})
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Medications', { personId: person.id })}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodySemibold }]}>
+                Cabinet →
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {personMeds.length === 0 ? (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Medications', { personId: person.id })}
+              style={[
+                styles.emptyMedBtn,
+                { backgroundColor: colors.surfaceWarm, borderRadius: radius.xl, padding: spacing.md },
+              ]}
+            >
+              <Text style={[{ color: colors.textSecondary, fontSize: typography.xs, fontFamily: fonts.bodyMedium, textAlign: 'center' }]}>
+                No prescriptions recorded yet. Tap to manage Care Cabinet.
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {personMeds.map((med) => {
+                const isTaken = wasDoseTakenToday(med, medicationLogs);
+                const isLow = isMedicationLowSupply(med);
+                return (
+                  <View
+                    key={med.id}
+                    style={[
+                      styles.medProfileRow,
+                      {
+                        backgroundColor: colors.surfaceWarm,
+                        borderRadius: radius.xl,
+                        borderColor: isLow ? '#FED7C3' : colors.border,
+                        borderWidth: 1,
+                        padding: 10,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.medProfileIcon,
+                        {
+                          backgroundColor: med.color ? `${med.color}15` : colors.accentLight,
+                          borderRadius: radius.lg,
+                          width: 36,
+                          height: 36,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        },
+                      ]}
+                    >
+                      <Text style={{ fontSize: 18 }}>{getFormEmoji(med.form)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
+                          {med.name}
+                        </Text>
+                        <Text style={[{ color: colors.textTertiary, fontSize: 11, fontFamily: fonts.body }]}>
+                          {med.dosage}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          {
+                            color: isLow ? '#FF784B' : colors.textSecondary,
+                            fontSize: 11,
+                            fontFamily: fonts.body,
+                            marginTop: 1,
+                          },
+                        ]}
+                      >
+                        {isLow
+                          ? `⚠️ Low stock: ${med.currentSupply} ${med.unit}`
+                          : `${med.currentSupply} ${med.unit} remaining`}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => logMedicationDose(med.id, 'taken')}
+                      style={[
+                        styles.medDoseBtn,
+                        {
+                          backgroundColor: isTaken ? colors.successLight : colors.accent,
+                          borderRadius: radius.full,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          {
+                            color: isTaken ? colors.success : '#FFFFFF',
+                            fontSize: 11,
+                            fontFamily: fonts.bodyBold,
+                          },
+                        ]}
+                      >
+                        {isTaken ? '✓ Taken' : 'Log Dose'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
         {/* Today's nudges */}
         {pendingNudges.length > 0 && (
           <View style={{ marginTop: spacing.xl }}>
@@ -253,5 +401,19 @@ const styles = StyleSheet.create({
   },
   todayLabel: {
     letterSpacing: 0.5,
+  },
+  medProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  medProfileIcon: {},
+  medDoseBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyMedBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
