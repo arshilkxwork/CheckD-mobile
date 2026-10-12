@@ -38,7 +38,7 @@ const MINUTES = ['00', '15', '30', '45'];
 const PERIODS = ['AM', 'PM'];
 
 export function CreateNudgeScreen({ navigation }: any) {
-  const { people, currentUser, addNudge } = useApp();
+  const { people, currentUser, addNudge, medications } = useApp();
   const { theme } = useTheme();
   const { colors, spacing, typography, fonts, radius, shadows } = theme;
 
@@ -194,6 +194,9 @@ export function CreateNudgeScreen({ navigation }: any) {
             onSelect={setSelectedCategory}
             customTitle={customTitle}
             onCustomTitle={setCustomTitle}
+            medications={medications}
+            selectedPerson={selectedPerson}
+            onBrowseCabinet={() => navigation.navigate('Medications')}
             colors={colors}
             typography={typography}
             fonts={fonts}
@@ -363,7 +366,20 @@ function StepWho({ people, selected, onSelect, onBrowseRoutines, colors, typogra
 }
 
 // ── Step: What ──────────────────────────────────────────────────────────────────
-function StepWhat({ selected, onSelect, customTitle, onCustomTitle, colors, typography, fonts, radius, shadows }: any) {
+function StepWhat({
+  selected,
+  onSelect,
+  customTitle,
+  onCustomTitle,
+  medications = [],
+  selectedPerson,
+  onBrowseCabinet,
+  colors,
+  typography,
+  fonts,
+  radius,
+  shadows,
+}: any) {
   const categories = Object.entries(CATEGORY_CONFIG) as [NudgeCategory, any][];
 
   return (
@@ -399,6 +415,76 @@ function StepWhat({ selected, onSelect, customTitle, onCustomTitle, colors, typo
           );
         })}
       </View>
+
+      {selected === 'medicine' && (
+        <View style={{ marginTop: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={[{ color: colors.textSecondary, fontSize: typography.xs, fontFamily: fonts.bodyBold, letterSpacing: 0.5 }]}>
+              {selectedPerson ? `FROM ${selectedPerson.firstName.toUpperCase()}'S CARE CABINET:` : 'CARE CABINET PRESCRIPTIONS:'}
+            </Text>
+            {onBrowseCabinet && (
+              <TouchableOpacity onPress={onBrowseCabinet}>
+                <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodySemibold }]}>
+                  Manage Cabinet →
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {medications.filter((m: any) => !selectedPerson || m.personId === selectedPerson.id).length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              {medications
+                .filter((m: any) => !selectedPerson || m.personId === selectedPerson.id)
+                .map((m: any) => {
+                  const isChosen = customTitle === `Take ${m.name} (${m.dosage})`;
+                  return (
+                    <TouchableOpacity
+                      key={m.id}
+                      onPress={() => onCustomTitle(`Take ${m.name} (${m.dosage})`)}
+                      style={[
+                        styles.medChoiceChip,
+                        {
+                          backgroundColor: isChosen ? colors.accentLight : colors.surface,
+                          borderColor: isChosen ? colors.accent : colors.border,
+                          borderRadius: radius.xl,
+                          ...shadows.sm,
+                        },
+                      ]}
+                    >
+                      <Text style={{ fontSize: 16, marginRight: 6 }}>💊</Text>
+                      <View>
+                        <Text style={[{ color: isChosen ? colors.accentDark : colors.text, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
+                          {m.name}
+                        </Text>
+                        <Text style={[{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.body }]}>
+                          {m.dosage}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+            </ScrollView>
+          ) : null}
+
+          <TextInput
+            value={customTitle}
+            onChangeText={onCustomTitle}
+            placeholder="e.g. Take Blood Pressure Pill"
+            placeholderTextColor={colors.textTertiary}
+            style={[
+              styles.customInput,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radius.xl,
+                color: colors.text,
+                fontSize: typography.md,
+                fontFamily: fonts.body,
+              },
+            ]}
+          />
+        </View>
+      )}
+
       {selected === 'custom' && (
         <TextInput
           value={customTitle}
@@ -813,4 +899,12 @@ const styles = StyleSheet.create({
   },
   nextBtnText: {},
   routineCallout: {},
+  medChoiceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    marginRight: 8,
+  },
 });
