@@ -68,19 +68,36 @@ export function HistoryScreen({ navigation }: any) {
                   A record of care ❤️
                 </Text>
               </View>
-              <TouchableOpacity
-                onPress={() => navigation?.navigate('Insights')}
-                activeOpacity={0.8}
-                style={[
-                  styles.insightsBtn,
-                  { backgroundColor: colors.surfaceWarm, borderRadius: radius.full, ...shadows.sm },
-                ]}
-              >
-                <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
-                <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
-                  Insights
-                </Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => navigation?.navigate('Medications')}
+                  activeOpacity={0.8}
+                  style={[
+                    styles.insightsBtn,
+                    { backgroundColor: colors.surfaceWarm, borderRadius: radius.full, ...shadows.sm },
+                  ]}
+                  accessibilityLabel="View Care Cabinet"
+                >
+                  <Text style={{ fontSize: 16, marginRight: 6 }}>💊</Text>
+                  <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
+                    Cabinet
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => navigation?.navigate('Insights')}
+                  activeOpacity={0.8}
+                  style={[
+                    styles.insightsBtn,
+                    { backgroundColor: colors.surfaceWarm, borderRadius: radius.full, ...shadows.sm },
+                  ]}
+                  accessibilityLabel="View Insights"
+                >
+                  <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
+                  <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
+                    Insights
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <TouchableOpacity
