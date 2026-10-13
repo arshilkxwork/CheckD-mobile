@@ -1,0 +1,8 @@
+name: CheckD Local Environment
+values:
+  - key: baseUrl
+    value: http://localhost:3000
+    enabled: true
+  - key: token
+    value: ""
+    enabled: true

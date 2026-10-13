@@ -1,0 +1,341 @@
+{
+  "info": {
+    "name": "CheckD API Collection",
+    "description": "Comprehensive Postman API collection for the CheckD care companion and accountability backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "System & Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Database Connection Test",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/db-test"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication & Profile",
+      "item": [
+        {
+          "name": "User Signup",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Arshil Khan\",\n  \"firstName\": \"Arshil\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"securepassword123\",\n  \"phone\": \"+91 98765 43210\"\n}"
+            },
+            "url": "{{baseUrl}}/signup"
+          }
+        },
+        {
+          "name": "User Login (Auto-saves Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.token) {",
+                  "    pm.environment.set('token', res.token);",
+                  "    console.log('Saved token to environment:', res.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"arshil@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/login"
+          }
+        },
+        {
+          "name": "Get Profile (/me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/me"
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bio\": \"Keeping my loved ones healthy & happy ❤️\",\n  \"avatarColor\": \"#6B9E7E\"\n}"
+            },
+            "url": "{{baseUrl}}/users/me"
+          }
+        },
+        {
+          "name": "Update Privacy Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"showCompletedTasks\": true,\n  \"showExactTimes\": true,\n  \"showMedicationNames\": true,\n  \"shareHistory\": true,\n  \"requireProof\": false\n}"
+            },
+            "url": "{{baseUrl}}/users/me/privacy"
+          }
+        },
+        {
+          "name": "Update Notification Preferences",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true,\n  \"reminderInterval\": 15,\n  \"quietHoursStart\": \"22:00\",\n  \"quietHoursEnd\": \"07:00\",\n  \"sounds\": true,\n  \"vibration\": true\n}"
+            },
+            "url": "{{baseUrl}}/users/me/notifications"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Accountability Circle (Connections)",
+      "item": [
+        {
+          "name": "Get Circle Connections",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/connections"
+          }
+        },
+        {
+          "name": "Add Person to Circle",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sarah\",\n  \"firstName\": \"Sarah\",\n  \"email\": \"sarah@example.com\",\n  \"relationship\": \"partner\",\n  \"avatarColor\": \"#C2796B\",\n  \"accountabilityLevel\": \"checkin\"\n}"
+            },
+            "url": "{{baseUrl}}/connections"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nudges",
+      "item": [
+        {
+          "name": "Get All Nudges",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/nudges"
+          }
+        },
+        {
+          "name": "Create Nudge",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Take Evening Blood Pressure Meds\",\n  \"category\": \"medicine\",\n  \"emoji\": \"💊\",\n  \"repeat\": \"daily\",\n  \"reminderInterval\": 15,\n  \"proofType\": \"tap\",\n  \"accountabilityLevel\": \"checkin\"\n}"
+            },
+            "url": "{{baseUrl}}/nudges"
+          }
+        },
+        {
+          "name": "Complete Nudge",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Taken after dinner with water!\"\n}"
+            },
+            "url": "{{baseUrl}}/nudges/1/complete"
+          }
+        },
+        {
+          "name": "Snooze Nudge",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minutes\": 15\n}"
+            },
+            "url": "{{baseUrl}}/nudges/1/snooze"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Care Cabinet (Medications)",
+      "item": [
+        {
+          "name": "Get All Medications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/medications"
+          }
+        },
+        {
+          "name": "Add Medication to Vault",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Amlodipine\",\n  \"dosage\": \"5mg\",\n  \"form\": \"tablet\",\n  \"color\": \"#3B82F6\",\n  \"instructions\": \"Take 1 tablet every morning\",\n  \"frequency\": \"once_daily\",\n  \"times\": [\"08:00\"],\n  \"currentSupply\": 28,\n  \"totalCapacity\": 30,\n  \"lowSupplyThreshold\": 5,\n  \"prescribingDoctor\": \"Dr. Sharma\"\n}"
+            },
+            "url": "{{baseUrl}}/medications"
+          }
+        },
+        {
+          "name": "Log Medication Dose (Take)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"taken\",\n  \"note\": \"Taken on schedule\"\n}"
+            },
+            "url": "{{baseUrl}}/medications/1/take"
+          }
+        },
+        {
+          "name": "Refill Medication Supply",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"addedUnits\": 30\n}"
+            },
+            "url": "{{baseUrl}}/medications/1/refill"
+          }
+        },
+        {
+          "name": "Get Medication Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/medications/logs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "History & Activity",
+      "item": [
+        {
+          "name": "Get Activity History",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/history"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/notifications"
+          }
+        },
+        {
+          "name": "Mark All Read",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/notifications/read-all"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cheers & Encouragement",
+      "item": [
+        {
+          "name": "Get Cheers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/cheers"
+          }
+        },
+        {
+          "name": "Send Cheer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"personId\": 1,\n  \"emoji\": \"🎉\",\n  \"message\": \"So proud of your consistency today!\"\n}"
+            },
+            "url": "{{baseUrl}}/cheers"
+          }
+        }
+      ]
+    }
+  ]
+}
