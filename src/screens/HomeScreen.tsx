@@ -1,570 +1,317 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, RefreshControl } from 'react-native';
+import Animated, {
+  Extrapolation,
+  FadeIn,
+  FadeOut,
+  interpolate,
+  LinearTransition,
+  useAnimatedStyle,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
-import { NudgeCard } from '../components/NudgeCard';
-import { RefillAlertBanner } from '../components/RefillAlertBanner';
+import { Screen, useScreenScroll } from '../ui/Screen';
+import { Glass, IconButton, Rise, SectionTitle, Tap, Txt, Button, IconWell } from '../ui/primitives';
+import { EmptyState, LinkCard, ProgressRing, Tag } from '../ui/pieces';
+import { NudgeRow } from '../ui/NudgeRow';
 import { getGreeting } from '../utils/formatters';
 import { calculateStreak } from '../utils/insights';
 import { isMedicationLowSupply } from '../utils/medications';
-import { User } from '../types';
+import { Nudge, User } from '../types';
 
 export function HomeScreen({ navigation }: any) {
-  const {
-    currentUser,
-    nudges,
-    people,
-    history,
-    completeNudge,
-    snoozeNudge,
-    unreadCount,
-    medications,
-    refillMedication,
-  } = useApp();
+  const { currentUser, nudges, people, history, completeNudge, unreadCount, medications, refillMedication, refreshSchedules } =
+    useApp();
   const { theme } = useTheme();
-  const { colors, spacing, typography, fonts, radius, shadows } = theme;
+  const { c } = theme;
   const [refreshing, setRefreshing] = useState(false);
 
+  const todayNudges = nudges.filter((n) => {
+    const scheduled = new Date(n.dueAt ?? n.scheduledTime);
+    return scheduled.toDateString() === new Date().toDateString() || n.repeat !== 'once';
+  });
+
+  // Reminders you set for yourself count as received, not sent.
+  const sentByMe = todayNudges.filter((n) => n.creatorId === currentUser.id && n.receiverId !== currentUser.id);
+  const receivedByMe = todayNudges.filter((n) => n.receiverId === currentUser.id);
+  const isOpen = (n: Nudge) => n.status === 'pending' || n.status === 'snoozed';
+
+  const forYou = receivedByMe.filter(isOpen);
+  const waitingOn = sentByMe.filter(isOpen);
+  const doneToday = [...sentByMe, ...receivedByMe].filter(
+    (n) => n.status === 'completed' && n.completedAt && new Date(n.completedAt).toDateString() === new Date().toDateString(),
+  );
+  const total = forYou.length + waitingOn.length + doneToday.length;
   const streak = calculateStreak(history, nudges);
   const lowMeds = medications.filter((m) => m.isActive && isMedicationLowSupply(m));
 
-  const greeting = getGreeting();
-  const hour = new Date().getHours();
-  const greetingEmoji = hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙';
+  const person = (id: string): User | null => people.find((p) => p.id === id) ?? (id === currentUser.id ? currentUser : null);
+  const open = (n: Nudge) =>
+    n.receiverId === currentUser.id
+      ? navigation.navigate('ReceiverNudge', { nudgeId: n.id })
+      : navigation.navigate('NudgeDetail', { nudgeId: n.id });
+  const newNudge = () => navigation.navigate('CreateTab', { screen: 'CreateNudge' });
 
-  const todayNudges = nudges.filter((n) => {
-    const scheduled = new Date(n.scheduledTime);
-    const today = new Date();
-    return scheduled.toDateString() === today.toDateString() || n.repeat !== 'once';
-  });
-
-  const sentByMe = todayNudges.filter((n) => n.creatorId === currentUser.id);
-  const receivedByMe = todayNudges.filter((n) => n.receiverId === currentUser.id);
-
-  const pendingSent = sentByMe.filter((n) => n.status === 'pending' || n.status === 'snoozed');
-  const completedSent = sentByMe.filter((n) => n.status === 'completed');
-  const pendingReceived = receivedByMe.filter((n) => n.status === 'pending' || n.status === 'snoozed');
-
-  const totalPending = pendingSent.length + pendingReceived.length;
-  const allDone = totalPending === 0 && (completedSent.length > 0 || sentByMe.length === 0);
-
-  const getPerson = (id: string): User =>
-    people.find((p) => p.id === id) || currentUser;
+  const stillOpen = forYou.length + waitingOn.length;
+  const summary =
+    total === 0
+      ? 'Nothing scheduled today yet.'
+      : stillOpen === 0
+        ? 'Everything’s done for today.'
+        : `${stillOpen} ${stillOpen === 1 ? 'nudge is' : 'nudges are'} still open today.`;
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    refreshSchedules();
+    setTimeout(() => setRefreshing(false), 600);
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
-        }
-      >
-        {/* ── Header ── */}
-        <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-          <View style={styles.headerLeft}>
-            <Text style={[styles.greetingLine, { color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body }]}>
-              {greeting} {greetingEmoji}
-            </Text>
-            <Text style={[styles.name, { color: colors.text, fontSize: typography.xxxl, fontFamily: fonts.headingBold }]}>
-              {currentUser.firstName}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Medications')}
-              activeOpacity={0.8}
-              style={[
-                styles.notifBtn,
-                {
-                  backgroundColor: colors.surface,
-                  borderRadius: radius.full,
-                  ...shadows.sm,
-                },
-              ]}
-              accessibilityLabel="View Care Cabinet"
-            >
-              <Text style={{ fontSize: 18 }}>💊</Text>
-              {lowMeds.length > 0 && (
-                <View style={[styles.badge, { backgroundColor: colors.accent, width: 8, height: 8, minWidth: 8, borderRadius: 4 }]} />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Insights')}
-              activeOpacity={0.8}
-              style={[
-                styles.notifBtn,
-                {
-                  backgroundColor: colors.surface,
-                  borderRadius: radius.full,
-                  ...shadows.sm,
-                },
-              ]}
-              accessibilityLabel="View Care Insights"
-            >
-              <Text style={{ fontSize: 18 }}>📊</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('AllNudges')}
-              activeOpacity={0.8}
-              style={[
-                styles.notifBtn,
-                {
-                  backgroundColor: colors.surface,
-                  borderRadius: radius.full,
-                  ...shadows.sm,
-                },
-              ]}
-              accessibilityLabel="View All Nudges"
-            >
-              <Text style={{ fontSize: 18 }}>📋</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Notifications')}
-              style={[
-                styles.notifBtn,
-                {
-                  backgroundColor: colors.surface,
-                  borderRadius: radius.full,
-                  ...shadows.sm,
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 18 }}>🔔</Text>
-              {unreadCount > 0 && (
-                <View style={[styles.badge, { backgroundColor: colors.accent }]}>
-                  <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
+    <Screen
+      title="Home"
+      large
+      heading={
+        <View>
+          <Txt v="largeTitle" accessibilityRole="header">
+            {getGreeting()},
+          </Txt>
+          <Txt v="largeTitle" style={theme.type.serifItalic} tone="accent">
+            {currentUser.firstName}
+          </Txt>
+          <Txt v="callout" tone="secondary" style={{ marginTop: 6 }}>
+            {summary}
+          </Txt>
         </View>
+      }
+      right={
+        <IconButton
+          name="notifications-outline"
+          label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+          badge={unreadCount}
+          onPress={() => navigation.navigate('Notifications')}
+        />
+      }
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} />}
+    >
+      <Rise index={0}>
+        <TodayPanel
+          done={doneToday.length}
+          total={total}
+          streak={streak.currentStreak}
+          next={forYou[0] ?? waitingOn[0]}
+          onPress={() => navigation.navigate('Insights')}
+        />
+      </Rise>
 
-        {/* ── Status banner ── */}
-        {allDone && completedSent.length > 0 ? (
-          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
-            <View
-              style={[
-                styles.doneBanner,
-                {
-                  backgroundColor: colors.successLight,
-                  borderRadius: radius.xxl,
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 22 }}>✨</Text>
-              <Text style={[{ color: colors.success, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
-                All caught up today!
-              </Text>
+      {lowMeds.length > 0 && (
+        <Rise index={1} style={{ marginTop: theme.space.md }}>
+          <Glass style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <IconWell name="medkit-outline" size={40} fg={c.warm} bg={c.warmSoft} />
+            <View style={{ flex: 1 }}>
+              <Txt v="subhead" style={{ fontWeight: '600' }}>
+                {lowMeds[0].name} is running low
+              </Txt>
+              <Txt v="footnote" tone="secondary">
+                {lowMeds[0].currentSupply} {lowMeds[0].unit} left
+                {lowMeds.length > 1 ? ` · ${lowMeds.length - 1} more low` : ''}
+              </Txt>
             </View>
-          </View>
-        ) : totalPending > 0 ? (
-          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
-            <View
-              style={[
-                styles.pendingBanner,
-                {
-                  backgroundColor: colors.accentSoft,
-                  borderRadius: radius.xxl,
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 18 }}>💌</Text>
-              <Text style={[{ color: colors.accentDark, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
-                {totalPending} {totalPending === 1 ? 'nudge' : 'nudges'} need attention
-              </Text>
-            </View>
-          </View>
-        ) : null}
+            <Button label="Refill" size="sm" variant="glass" onPress={() => refillMedication(lowMeds[0].id, 30)} />
+          </Glass>
+        </Rise>
+      )}
 
-        {/* ── Streak & Insights Banner ── */}
-        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Insights')}
-            activeOpacity={0.88}
-            style={[
-              styles.streakBanner,
-              {
-                backgroundColor: colors.surface,
-                borderRadius: radius.xl,
-                borderWidth: 1,
-                borderColor: colors.border,
-                padding: spacing.md,
-                ...shadows.sm,
-              },
-            ]}
-          >
-            <View style={styles.streakBannerLeft}>
-              <View
-                style={[
-                  styles.streakIconCircle,
-                  { backgroundColor: streak.currentStreak >= 3 ? '#FDF3EC' : colors.accentLight, borderRadius: radius.full },
-                ]}
-              >
-                <Text style={{ fontSize: 22 }}>{streak.currentStreak >= 7 ? '👑' : '🔥'}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
-                    {streak.currentStreak}-Day Care Streak
-                  </Text>
-                  <View style={[styles.rateTag, { backgroundColor: colors.accentLight, borderRadius: radius.full }]}>
-                    <Text style={[{ color: colors.accent, fontSize: 10, fontFamily: fonts.bodyBold }]}>
-                      {streak.completionRate}% ON-TIME
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[{ color: colors.textSecondary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 2 }]}>
-                  View consistency stats, activity grid & badges →
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </View>
+      {total === 0 ? (
+        <Rise index={2} style={{ marginTop: theme.space.xxl }}>
+          <EmptyState
+            icon="leaf-outline"
+            title="A quiet start"
+            body="Set a gentle reminder for someone you care about, or for yourself. It keeps pinging until it’s done."
+            action="Send a nudge"
+            onAction={newNudge}
+          />
+        </Rise>
+      ) : null}
 
-        {/* ── Low Supply Refill Alert Banner ── */}
-        {lowMeds.length > 0 && (
-          <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.md }}>
-            <RefillAlertBanner
-              lowMeds={lowMeds}
-              people={people}
-              onPressManage={() => navigation.navigate('Medications')}
-              onPressQuickRefill={(med) => refillMedication(med.id, 30)}
-            />
-          </View>
-        )}
-
-        {/* ── Quick Hub: All Nudges, Care Cabinet & Routines ── */}
-        <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl, gap: 10 }}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Medications')}
-            activeOpacity={0.85}
-            style={[
-              styles.allNudgesCard,
-              {
-                backgroundColor: colors.surface,
-                borderRadius: radius.xl,
-                borderWidth: 1,
-                borderColor: lowMeds.length > 0 ? '#FED7C3' : colors.border,
-                ...shadows.sm,
-              },
-            ]}
-          >
-            <View style={styles.allNudgesCardLeft}>
-              <View style={[styles.allNudgesIcon, { backgroundColor: lowMeds.length > 0 ? '#FFF0EB' : '#EEF5F0', borderRadius: radius.lg }]}>
-                <Text style={{ fontSize: 20 }}>💊</Text>
-              </View>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
-                    Care Cabinet ({medications.length})
-                  </Text>
-                  {lowMeds.length > 0 && (
-                    <View style={[styles.rateTag, { backgroundColor: '#FEE5D8', borderRadius: radius.full }]}>
-                      <Text style={[{ color: colors.accentDark, fontSize: 10, fontFamily: fonts.bodyBold }]}>
-                        {lowMeds.length} REFILL NEEDED
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={[{ color: colors.textTertiary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 2 }]}>
-                  Prescription inventory, schedules & dose logs
-                </Text>
-              </View>
-            </View>
-            <Text style={[{ color: colors.accent, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
-              →
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate('AllNudges')}
-            activeOpacity={0.85}
-            style={[
-              styles.allNudgesCard,
-              {
-                backgroundColor: colors.surface,
-                borderRadius: radius.xl,
-                borderWidth: 1,
-                borderColor: colors.border,
-                ...shadows.sm,
-              },
-            ]}
-          >
-            <View style={styles.allNudgesCardLeft}>
-              <View style={[styles.allNudgesIcon, { backgroundColor: colors.surfaceWarm, borderRadius: radius.lg }]}>
-                <Text style={{ fontSize: 20 }}>📋</Text>
-              </View>
-              <View>
-                <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
-                  View all nudges ({nudges.length})
-                </Text>
-                <Text style={[{ color: colors.textTertiary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 2 }]}>
-                  Search, filter & review across people
-                </Text>
-              </View>
-            </View>
-            <Text style={[{ color: colors.accent, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
-              →
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Routines')}
-            activeOpacity={0.85}
-            style={[
-              styles.allNudgesCard,
-              {
-                backgroundColor: colors.surface,
-                borderRadius: radius.xl,
-                borderWidth: 1,
-                borderColor: colors.border,
-                ...shadows.sm,
-              },
-            ]}
-          >
-            <View style={styles.allNudgesCardLeft}>
-              <View style={[styles.allNudgesIcon, { backgroundColor: colors.accentLight, borderRadius: radius.lg }]}>
-                <Text style={{ fontSize: 20 }}>🌿</Text>
-              </View>
-              <View>
-                <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
-                  Care Routine Templates
-                </Text>
-                <Text style={[{ color: colors.textTertiary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 2 }]}>
-                  1-tap bundles for parents, partners & kids
-                </Text>
-              </View>
-            </View>
-            <Text style={[{ color: colors.accent, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
-              →
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Nudges for me ── */}
-        {pendingReceived.length > 0 && (
-          <Section label="For you 💌" colors={colors} typography={typography} fonts={fonts} spacing={spacing}>
-            {pendingReceived.map((n) => (
-              <NudgeCard
-                key={n.id}
+      {forYou.length > 0 && (
+        <NudgeSection title="For you">
+          {forYou.map((n, i) => (
+            <Item key={n.id} index={i}>
+              <NudgeRow
                 nudge={n}
-                person={getPerson(n.creatorId)}
-                onPress={() => navigation.navigate('ReceiverNudge', { nudgeId: n.id })}
-                onComplete={() => completeNudge(n.id)}
-                onSnooze={() => snoozeNudge(n.id, 15)}
+                who={n.creatorId === currentUser.id ? null : person(n.creatorId)}
+                direction={n.creatorId === currentUser.id ? 'self' : 'for-me'}
+                onPress={() => open(n)}
+                onDone={() => completeNudge(n.id)}
               />
-            ))}
-          </Section>
-        )}
+            </Item>
+          ))}
+        </NudgeSection>
+      )}
 
-        {/* ── Sent by me — pending ── */}
-        {pendingSent.length > 0 && (
-          <Section label="Waiting on 🕊️" colors={colors} typography={typography} fonts={fonts} spacing={spacing}>
-            {pendingSent.map((n) => (
-              <NudgeCard
-                key={n.id}
+      {waitingOn.length > 0 && (
+        <NudgeSection title="Waiting on" action="See all" onAction={() => navigation.navigate('AllNudges')}>
+          {waitingOn.map((n, i) => (
+            <Item key={n.id} index={i}>
+              <NudgeRow
                 nudge={n}
-                person={getPerson(n.receiverId)}
-                onPress={() => navigation.navigate('NudgeDetail', { nudgeId: n.id })}
+                who={person(n.receiverId)}
+                direction="sent"
+                onPress={() => open(n)}
+                onDone={() => completeNudge(n.id)}
               />
-            ))}
-          </Section>
-        )}
+            </Item>
+          ))}
+        </NudgeSection>
+      )}
 
-        {/* ── Done today ── */}
-        {completedSent.length > 0 && (
-          <Section label="Done today 🌸" colors={colors} typography={typography} fonts={fonts} spacing={spacing}>
-            {completedSent.map((n) => (
-              <NudgeCard
-                key={n.id}
+      {doneToday.length > 0 && (
+        <NudgeSection title="Done today">
+          {doneToday.map((n, i) => (
+            <Item key={n.id} index={i}>
+              <NudgeRow
                 nudge={n}
-                person={getPerson(n.receiverId)}
-                onPress={() => navigation.navigate('NudgeDetail', { nudgeId: n.id })}
+                who={person(n.receiverId === currentUser.id ? n.creatorId : n.receiverId)}
+                direction={n.receiverId === currentUser.id ? (n.creatorId === currentUser.id ? 'self' : 'for-me') : 'sent'}
+                onPress={() => open(n)}
+                onDone={() => {}}
               />
-            ))}
-          </Section>
-        )}
+            </Item>
+          ))}
+        </NudgeSection>
+      )}
 
-        {/* ── Truly empty ── */}
-        {sentByMe.length === 0 && receivedByMe.length === 0 && (
-          <View style={{ paddingHorizontal: spacing.lg }}>
-            <View
-              style={[
-                styles.emptyCard,
-                {
-                  backgroundColor: colors.surfaceWarm,
-                  borderRadius: radius.xxxl,
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 44, marginBottom: 16 }}>🌿</Text>
-              <Text style={[{ color: colors.text, fontSize: typography.xl, fontFamily: fonts.heading, textAlign: 'center' }]}>
-                Nothing yet
-              </Text>
-              <Text style={[{ color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body, textAlign: 'center', marginTop: 8, lineHeight: typography.md * typography.lineHeightRelaxed }]}>
-                Send your first nudge and let someone know you care.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* ── Create CTA ── */}
-        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xxl, paddingBottom: 48 }}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('CreateNudge')}
-            activeOpacity={0.8}
-            style={[
-              styles.createBtn,
-              {
-                backgroundColor: colors.accent,
-                borderRadius: radius.full,
-                ...shadows.accent,
-              },
-            ]}
-          >
-            <Text style={{ fontSize: 20, marginRight: 10 }}>💌</Text>
-            <Text style={[{ color: '#fff', fontSize: typography.lg, fontFamily: fonts.bodySemibold }]}>
-              Send a nudge
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <SectionTitle title="Care tools" />
+      <Rise index={3} style={{ flexDirection: 'row', gap: theme.space.md }}>
+        <LinkCard
+          icon="medkit-outline"
+          title="Care Cabinet"
+          body={medications.length ? `${medications.length} medicines` : 'Track medicines and refills'}
+          tint={c.category.medicine}
+          onPress={() => navigation.navigate('Medications')}
+        />
+        <LinkCard
+          icon="leaf-outline"
+          title="Routines"
+          body="One-tap bundles of nudges"
+          tint={c.category.exercise}
+          onPress={() => navigation.navigate('Routines')}
+        />
+      </Rise>
+      {total > 0 && (
+        <Button label="Send a nudge" icon="add" onPress={newNudge} style={{ marginTop: theme.space.xxl }} />
+      )}
+    </Screen>
   );
 }
 
-function Section({ label, children, colors, typography, fonts, spacing }: any) {
+function NudgeSection({
+  title,
+  action,
+  onAction,
+  children,
+}: {
+  title: string;
+  action?: string;
+  onAction?: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <View style={{ marginBottom: spacing.xl }}>
-      <Text
-        style={[
-          styles.sectionLabel,
-          {
-            color: colors.textSecondary,
-            fontSize: typography.sm,
-            fontFamily: fonts.bodySemibold,
-            paddingHorizontal: spacing.lg,
-            marginBottom: spacing.sm,
-            letterSpacing: 0.3,
-          },
-        ]}
-      >
-        {label}
-      </Text>
-      {children}
-    </View>
+    <Animated.View layout={LinearTransition.springify().damping(22)}>
+      <SectionTitle title={title} action={action} onAction={onAction} />
+      <View style={{ gap: 10 }}>{children}</View>
+    </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: { paddingBottom: 40 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingTop: 28,
-    paddingBottom: 26,
-  },
-  headerLeft: { flex: 1 },
-  greetingLine: { marginBottom: 4 },
-  name: { lineHeight: 38 },
-  notifBtn: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-  },
-  badge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: { fontSize: 9, color: '#fff', fontWeight: '700' },
-  doneBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  pendingBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-  },
-  sectionLabel: {},
-  emptyCard: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 28,
-  },
-  createBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-  },
-  allNudgesCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  allNudgesCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  allNudgesIcon: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  streakBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  streakBannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  streakIconCircle: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rateTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-});
+/** List item that fades out of one section and into another when its state changes. */
+function Item({ index, children }: { index: number; children: React.ReactNode }) {
+  const reduce = useReducedMotion();
+  return (
+    <Animated.View
+      entering={reduce ? undefined : FadeIn.delay(Math.min(index, 5) * 50).duration(380)}
+      exiting={reduce ? undefined : FadeOut.duration(220)}
+      layout={reduce ? undefined : LinearTransition.springify().damping(22).stiffness(180)}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+function TodayPanel({
+  done,
+  total,
+  streak,
+  next,
+  onPress,
+}: {
+  done: number;
+  total: number;
+  streak: number;
+  next?: Nudge;
+  onPress: () => void;
+}) {
+  const { theme } = useTheme();
+  const scrollY = useScreenScroll();
+  // The panel settles back slightly as it scrolls away under the bar.
+  const recede = useAnimatedStyle(() => {
+    const y = scrollY?.value ?? 0;
+    return {
+      opacity: interpolate(y, [60, 260], [1, 0.55], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(y, [60, 260], [1, 0.95], Extrapolation.CLAMP) }],
+    };
+  });
+  const left = total - done;
+  return (
+    <Animated.View style={recede}>
+      <Tap onPress={onPress} scaleTo={0.985} accessibilityRole="button" accessibilityLabel="Today’s progress, open insights">
+        <Glass strong lifted radius={theme.radius.xl} style={{ padding: theme.space.xl }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.xl }}>
+            <ProgressRing value={total ? done / total : 0} size={84} stroke={7}>
+              <Txt v="title" style={{ lineHeight: 30 }}>
+                {done}
+                <Txt v="callout" tone="secondary">
+                  /{total}
+                </Txt>
+              </Txt>
+            </ProgressRing>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Txt v="title2">Today</Txt>
+              <Txt v="footnote" tone="secondary">
+                {total === 0 ? 'No nudges yet' : left === 0 ? 'All done. Lovely.' : `${done} done · ${left} to go`}
+              </Txt>
+              <View style={{ marginTop: 4 }}>
+                <Tag
+                  icon="leaf"
+                  tone={streak > 0 ? 'accent' : 'muted'}
+                  label={streak > 0 ? `${streak}-day streak` : 'Start a streak today'}
+                />
+              </View>
+            </View>
+          </View>
+          {next ? (
+            <View
+              style={{
+                marginTop: theme.space.lg,
+                paddingTop: theme.space.md,
+                borderTopWidth: 1,
+                borderTopColor: theme.c.hairline,
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <Txt v="footnote" tone="secondary">
+                Up next
+              </Txt>
+              <Txt v="footnote" style={{ fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
+                {next.title}
+              </Txt>
+            </View>
+          ) : null}
+        </Glass>
+      </Tap>
+    </Animated.View>
+  );
+}

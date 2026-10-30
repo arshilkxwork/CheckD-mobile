@@ -1,910 +1,454 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, TextInput, ScrollView, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  ZoomIn,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import Constants from 'expo-constants';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
-import { CATEGORY_CONFIG, RELATIONSHIP_CONFIG } from '../theme/tokens';
-import { User, Nudge, NudgeCategory, RepeatInterval, ReminderInterval } from '../types';
+import { CATEGORY_CONFIG } from '../theme/tokens';
+import { Screen } from '../ui/Screen';
+import { Button, Chip, Glass, IconWell, Segmented, Tap, Txt, haptic } from '../ui/primitives';
+import { Avatar, Mark } from '../ui/pieces';
+import { Nudge, NudgeCategory, RepeatInterval, ReminderInterval, User } from '../types';
 import { generateId } from '../utils/formatters';
+import { nextTimeOfDay } from '../services/reminders';
 
-type Step = 'who' | 'what' | 'when' | 'settings' | 'review';
+const APP_NAME = Constants.expoConfig?.name ?? 'Pingkin';
 
-const STEPS: Step[] = ['who', 'what', 'when', 'settings', 'review'];
-
-const REPEAT_OPTIONS: { value: RepeatInterval; label: string }[] = [
-  { value: 'once', label: 'Just once' },
-  { value: 'daily', label: 'Every day' },
+const CATEGORIES: NudgeCategory[] = ['medicine', 'water', 'exercise', 'checkin', 'homework', 'custom'];
+const SUGGESTED: Record<NudgeCategory, string> = {
+  medicine: 'Take your medicine',
+  water: 'Drink a glass of water',
+  exercise: 'Go for a short walk',
+  checkin: 'Let me know you’re okay',
+  homework: 'Finish your homework',
+  custom: '',
+};
+const REPEATS: { value: RepeatInterval; label: string }[] = [
+  { value: 'once', label: 'Once' },
+  { value: 'daily', label: 'Daily' },
   { value: 'weekdays', label: 'Weekdays' },
   { value: 'weekends', label: 'Weekends' },
   { value: 'weekly', label: 'Weekly' },
 ];
-
-const REMINDER_OPTIONS: { value: ReminderInterval; label: string }[] = [
+const INTERVALS: { value: ReminderInterval; label: string }[] = [
   { value: 5, label: '5 min' },
   { value: 15, label: '15 min' },
   { value: 30, label: '30 min' },
-  { value: 60, label: '1 hour' },
+  { value: 60, label: '1 hr' },
+];
+const PRESETS = [
+  { label: 'Morning', h: 8, m: 0 },
+  { label: 'Midday', h: 13, m: 0 },
+  { label: 'Evening', h: 19, m: 0 },
+  { label: 'Night', h: 21, m: 0 },
 ];
 
-const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
-const MINUTES = ['00', '15', '30', '45'];
-const PERIODS = ['AM', 'PM'];
+function label12(h: number, m: number) {
+  const hh = h % 12 === 0 ? 12 : h % 12;
+  return `${hh}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
 
-export function CreateNudgeScreen({ navigation }: any) {
+export function CreateNudgeScreen({ navigation, route }: any) {
   const { people, currentUser, addNudge, medications } = useApp();
   const { theme } = useTheme();
-  const { colors, spacing, typography, fonts, radius, shadows } = theme;
+  const { c } = theme;
+  const insets = useSafeAreaInsets();
+  const reduce = useReducedMotion();
 
-  const [step, setStep] = useState<Step>('who');
-  const [selectedPerson, setSelectedPerson] = useState<User | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<NudgeCategory>('medicine');
-  const [customTitle, setCustomTitle] = useState('');
-  const [selectedHour, setSelectedHour] = useState('9');
-  const [selectedMinute, setSelectedMinute] = useState('00');
-  const [selectedPeriod, setSelectedPeriod] = useState('PM');
+  const everyone: User[] = [currentUser, ...people];
+  const [picked, setWho] = useState<User | null>(null);
+  // With just one person in the circle (usually your partner), start with them.
+  const who = picked ?? (people.length === 1 ? people[0] : null);
+  const [needWho, setNeedWho] = useState(false);
+  const scrollRef = useRef<any>(null);
+  const shake = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }] }));
+  const [category, setCategory] = useState<NudgeCategory>('medicine');
+  const [title, setTitle] = useState('');
+  const [hour, setHour] = useState(21);
+  const [minute, setMinute] = useState(0);
   const [repeat, setRepeat] = useState<RepeatInterval>('daily');
-  const [reminderInterval, setReminderInterval] = useState<ReminderInterval>(15);
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [interval, setIntervalMin] = useState<ReminderInterval>(15);
+  const [sent, setSent] = useState(false);
 
-  const stepIndex = STEPS.indexOf(step);
+  // Arriving from a person's profile preselects them.
+  const presetId: string | undefined = route?.params?.personId;
+  const [appliedPreset, setAppliedPreset] = useState<string | undefined>();
+  if (presetId && presetId !== appliedPreset) {
+    setAppliedPreset(presetId);
+    const p = everyone.find((x) => x.id === presetId);
+    if (p) setWho(p);
+  }
+  if (!presetId && appliedPreset) setAppliedPreset(undefined);
+  useEffect(() => {
+    // Clear the param so arriving again for the same person re-applies it.
+    if (presetId) navigation.setParams({ personId: undefined });
+  }, [presetId, navigation]);
 
-  const goNext = () => {
-    if (stepIndex < STEPS.length - 1) {
-      setStep(STEPS[stepIndex + 1]);
+  const isMe = who?.id === currentUser.id;
+  const nudgeTime = (deltaMin: number) => {
+    const t = (hour * 60 + minute + deltaMin + 1440) % 1440;
+    setHour(Math.floor(t / 60));
+    setMinute(t % 60);
+  };
+  const finalTitle = title.trim() || SUGGESTED[category];
+  const ready = !!who && finalTitle.length > 0;
+  const meds = who ? medications.filter((m) => m.isActive && m.personId === who.id) : [];
+
+  const reset = () => {
+    setWho(null);
+    setCategory('medicine');
+    setTitle('');
+    setHour(21);
+    setMinute(0);
+    setRepeat('daily');
+    setIntervalMin(15);
+  };
+
+  const close = () => {
+    reset();
+    navigation.navigate('HomeTab', { screen: 'Home' });
+  };
+
+  const send = () => {
+    if (!who) {
+      // Point at what's missing instead of sitting there disabled.
+      setNeedWho(true);
+      haptic.soft();
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      if (!reduce) {
+        shake.set(
+          withSequence(
+            withTiming(-8, { duration: 60 }),
+            withTiming(8, { duration: 80 }),
+            withTiming(-5, { duration: 70 }),
+            withTiming(0, { duration: 60 }),
+          ),
+        );
+      }
+      return;
     }
-  };
-
-  const goBack = () => {
-    if (stepIndex > 0) {
-      setStep(STEPS[stepIndex - 1]);
-    } else {
-      navigation.goBack();
-    }
-  };
-
-  const canProceed = () => {
-    if (step === 'who') return selectedPerson !== null;
-    if (step === 'what') {
-      return selectedCategory !== 'custom' || customTitle.trim().length > 0;
-    }
-    return true;
-  };
-
-  const buildTitle = () => {
-    if (selectedCategory === 'custom') return customTitle.trim() || 'Custom nudge';
-    return CATEGORY_CONFIG[selectedCategory]?.label ?? 'Nudge';
-  };
-
-  const buildEmoji = () => CATEGORY_CONFIG[selectedCategory]?.emoji ?? '📌';
-
-  const buildScheduledTime = () => {
-    const now = new Date();
-    let h = parseInt(selectedHour, 10);
-    const m = parseInt(selectedMinute, 10);
-    if (selectedPeriod === 'PM' && h !== 12) h += 12;
-    if (selectedPeriod === 'AM' && h === 12) h = 0;
-    now.setHours(h, m, 0, 0);
-    return now.toISOString();
-  };
-
-  const handleSend = async () => {
-    if (!selectedPerson) return;
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-
-    const newNudge: Nudge = {
+    if (!ready) return;
+    const now = new Date().toISOString();
+    const nudge: Nudge = {
       id: generateId(),
       creatorId: currentUser.id,
-      receiverId: selectedPerson.id,
-      category: selectedCategory,
-      emoji: buildEmoji(),
-      title: buildTitle(),
-      scheduledTime: buildScheduledTime(),
+      receiverId: who.id,
+      category,
+      emoji: CATEGORY_CONFIG[category].emoji,
+      title: finalTitle,
+      scheduledTime: nextTimeOfDay(hour, minute).toISOString(),
       repeat,
-      reminderInterval,
+      reminderInterval: interval,
       stopWhen: 'completed',
       status: 'pending',
       proofType: 'tap',
-      accountabilityLevel: selectedPerson.accountabilityLevel,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      accountabilityLevel: who.accountabilityLevel,
+      createdAt: now,
+      updatedAt: now,
     };
-
-    addNudge(newNudge);
-    setLoading(false);
-    setSuccess(true);
-
+    addNudge(nudge);
+    haptic.success();
+    setSent(true);
     setTimeout(() => {
-      setSuccess(false);
-      navigation.navigate('Home');
-    }, 2200);
+      setSent(false);
+      close();
+    }, 1500);
   };
 
-  if (success) {
-    return (
-      <View style={[styles.successContainer, { backgroundColor: colors.bg }]}>
-        <Text style={styles.successEmoji}>🌿</Text>
-        <Text style={[styles.successTitle, { color: colors.text, fontSize: typography.xxl, fontFamily: fonts.headingBold }]}>
-          Nudge sent!
-        </Text>
-        <Text style={[styles.successSub, { color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body }]}>
-          {selectedPerson?.firstName} will be notified.
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={[styles.navHeader, { borderBottomColor: colors.divider }]}>
-        <TouchableOpacity onPress={goBack} style={styles.backBtn}>
-          <Text style={[styles.backText, { color: colors.accent, fontSize: typography.md, fontFamily: fonts.bodyMedium }]}>
-            {stepIndex === 0 ? 'Cancel' : '← Back'}
-          </Text>
-        </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.text, fontSize: typography.md, fontFamily: fonts.heading }]}>
-          New Nudge
-        </Text>
-        <View style={{ width: 60 }} />
-      </View>
-
-      {/* Progress dots */}
-      <View style={styles.progressRow}>
-        {STEPS.map((s, i) => (
-          <View
-            key={s}
-            style={[
-              styles.dot,
-              {
-                backgroundColor: i <= stepIndex ? colors.accent : colors.border,
-                width: i === stepIndex ? 24 : 8,
-              },
-            ]}
-          />
-        ))}
-      </View>
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, { paddingHorizontal: spacing.lg }]}>
-        {step === 'who' && (
-          <StepWho
-            people={people}
-            selected={selectedPerson}
-            onSelect={setSelectedPerson}
-            onBrowseRoutines={() => navigation.navigate('Routines')}
-            colors={colors}
-            typography={typography}
-            fonts={fonts}
-            radius={radius}
-            shadows={shadows}
-            spacing={spacing}
-          />
-        )}
-        {step === 'what' && (
-          <StepWhat
-            selected={selectedCategory}
-            onSelect={setSelectedCategory}
-            customTitle={customTitle}
-            onCustomTitle={setCustomTitle}
-            medications={medications}
-            selectedPerson={selectedPerson}
-            onBrowseCabinet={() => navigation.navigate('Medications')}
-            colors={colors}
-            typography={typography}
-            fonts={fonts}
-            radius={radius}
-            shadows={shadows}
-            spacing={spacing}
-          />
-        )}
-        {step === 'when' && (
-          <StepWhen
-            hour={selectedHour}
-            minute={selectedMinute}
-            period={selectedPeriod}
-            setHour={setSelectedHour}
-            setMinute={setSelectedMinute}
-            setPeriod={setSelectedPeriod}
-            colors={colors}
-            typography={typography}
-            fonts={fonts}
-            radius={radius}
-            spacing={spacing}
-          />
-        )}
-        {step === 'settings' && (
-          <StepSettings
-            repeat={repeat}
-            setRepeat={setRepeat}
-            reminderInterval={reminderInterval}
-            setReminderInterval={setReminderInterval}
-            colors={colors}
-            typography={typography}
-            fonts={fonts}
-            radius={radius}
-            spacing={spacing}
-          />
-        )}
-        {step === 'review' && selectedPerson && (
-          <StepReview
-            person={selectedPerson}
-            category={selectedCategory}
-            title={buildTitle()}
-            emoji={buildEmoji()}
-            hour={selectedHour}
-            minute={selectedMinute}
-            period={selectedPeriod}
-            repeat={repeat}
-            reminderInterval={reminderInterval}
-            colors={colors}
-            typography={typography}
-            fonts={fonts}
-            radius={radius}
-            shadows={shadows}
-            spacing={spacing}
-          />
-        )}
-      </ScrollView>
-
-      {/* Bottom action */}
-      <View style={[styles.bottomBar, { paddingHorizontal: spacing.lg, backgroundColor: colors.bg }]}>
-        <TouchableOpacity
-          onPress={step === 'review' ? handleSend : goNext}
-          disabled={!canProceed() || loading}
-          activeOpacity={0.82}
-          style={[
-            styles.nextBtn,
-            {
-              backgroundColor: canProceed() ? colors.accent : colors.border,
-              borderRadius: radius.full,
-              opacity: loading ? 0.7 : 1,
-              ...( canProceed() ? shadows.accent : {}),
-            },
-          ]}
-        >
-          <Text style={[styles.nextBtnText, { color: '#fff', fontSize: typography.lg, fontFamily: fonts.bodySemibold }]}>
-            {loading ? 'Sending…' : step === 'review' ? 'Send Nudge →' : 'Continue →'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+  const label = (text: string) => (
+    <Txt v="headline" style={{ marginTop: theme.space.xxl, marginBottom: theme.space.md }}>
+      {text}
+    </Txt>
   );
-}
-
-// ── Step: Who ──────────────────────────────────────────────────────────────────
-function StepWho({ people, selected, onSelect, onBrowseRoutines, colors, typography, fonts, radius, shadows, spacing }: any) {
-  return (
-    <View>
-      <Text style={[styles.stepTitle, { color: colors.text, fontSize: typography.xxl, fontFamily: fonts.headingBold }]}>
-        Who is this for?
-      </Text>
-      <Text style={[styles.stepSub, { color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body, lineHeight: typography.md * typography.lineHeightRelaxed }]}>
-        Choose someone from your circle.
-      </Text>
-
-      {onBrowseRoutines && (
-        <TouchableOpacity
-          onPress={onBrowseRoutines}
-          activeOpacity={0.85}
-          style={[
-            styles.routineCallout,
-            {
-              backgroundColor: colors.surfaceWarm,
-              borderRadius: radius.xl,
-              borderWidth: 1,
-              borderColor: colors.border,
-              padding: spacing?.md || 14,
-              marginBottom: spacing?.lg || 20,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 12,
-              ...shadows.sm,
-            },
-          ]}
-        >
-          <Text style={{ fontSize: 24 }}>🌿</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
-              Want a complete care routine?
-            </Text>
-            <Text style={[{ color: colors.textSecondary, fontSize: typography.xs, fontFamily: fonts.body, marginTop: 1 }]}>
-              Browse 1-tap care templates for parents & partners →
-            </Text>
-          </View>
-        </TouchableOpacity>
-      )}
-
-      {people.map((p: User) => {
-        const isSelected = selected?.id === p.id;
-        const rel = p.relationship ? RELATIONSHIP_CONFIG[p.relationship] : null;
-        return (
-          <TouchableOpacity
-            key={p.id}
-            onPress={() => onSelect(p)}
-            activeOpacity={0.82}
-            style={[
-              styles.personOption,
-              {
-                backgroundColor: isSelected ? colors.accentLight : colors.surface,
-                borderRadius: radius.xxl,
-                ...shadows.sm,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.personAvatar,
-                { backgroundColor: p.avatarColor + '18', borderRadius: radius.full },
-              ]}
-            >
-              <Text style={[styles.personAvatarText, { color: p.avatarColor, fontFamily: fonts.heading }]}>{p.firstName.charAt(0)}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.personOptionName, { color: colors.text, fontSize: typography.lg, fontFamily: fonts.heading }]}>
-                {p.firstName}
-              </Text>
-              {rel && (
-                <Text style={[styles.personOptionRel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body }]}>
-                  {rel.emoji} {rel.label}
-                </Text>
-              )}
-            </View>
-            {isSelected && <Text style={{ color: colors.accent, fontSize: 20 }}>✓</Text>}
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
-
-// ── Step: What ──────────────────────────────────────────────────────────────────
-function StepWhat({
-  selected,
-  onSelect,
-  customTitle,
-  onCustomTitle,
-  medications = [],
-  selectedPerson,
-  onBrowseCabinet,
-  colors,
-  typography,
-  fonts,
-  radius,
-  shadows,
-}: any) {
-  const categories = Object.entries(CATEGORY_CONFIG) as [NudgeCategory, any][];
 
   return (
-    <View>
-      <Text style={[styles.stepTitle, { color: colors.text, fontSize: typography.xxl, fontFamily: fonts.headingBold }]}>
-        What's the nudge?
-      </Text>
-      <Text style={[styles.stepSub, { color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body, lineHeight: typography.md * typography.lineHeightRelaxed }]}>
-        Pick a category or create a custom one.
-      </Text>
-      <View style={styles.categoryGrid}>
-        {categories.map(([key, cat]) => {
-          const isSelected = selected === key;
-          return (
-            <TouchableOpacity
-              key={key}
-              onPress={() => onSelect(key)}
-              activeOpacity={0.82}
-              style={[
-                styles.categoryChip,
-                {
-                  backgroundColor: isSelected ? colors.accentLight : colors.surface,
-                  borderRadius: radius.xl,
-                  ...shadows.sm,
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 28, marginBottom: 6 }}>{cat.emoji}</Text>
-              <Text style={[styles.catLabel, { color: isSelected ? colors.accent : colors.text, fontSize: typography.sm, fontFamily: isSelected ? fonts.bodySemibold : fonts.body }]}>
-                {cat.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {selected === 'medicine' && (
-        <View style={{ marginTop: 16 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={[{ color: colors.textSecondary, fontSize: typography.xs, fontFamily: fonts.bodyBold, letterSpacing: 0.5 }]}>
-              {selectedPerson ? `FROM ${selectedPerson.firstName.toUpperCase()}'S CARE CABINET:` : 'CARE CABINET PRESCRIPTIONS:'}
-            </Text>
-            {onBrowseCabinet && (
-              <TouchableOpacity onPress={onBrowseCabinet}>
-                <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodySemibold }]}>
-                  Manage Cabinet →
-                </Text>
-              </TouchableOpacity>
-            )}
+    <View style={{ flex: 1 }}>
+      <Screen
+        title="New nudge"
+        large
+        subtitle="A gentle reminder that keeps checking in until it’s done."
+        onBack={close}
+        backIcon="close"
+        keyboard
+        bottomInset={24}
+        scrollRef={scrollRef}
+        right={<Button label="Routines" size="sm" variant="glass" icon="leaf-outline" onPress={() => navigation.navigate('Routines')} />}
+        footer={
+          <View style={{ paddingHorizontal: theme.space.xl, paddingTop: 8, paddingBottom: insets.bottom + 12 }}>
+            <Button
+              label={!who ? 'Send nudge' : isMe ? 'Set reminder' : `Send to ${who.firstName}`}
+              icon="paper-plane-outline"
+              size="lg"
+              disabled={!!who && !ready}
+              onPress={send}
+            />
           </View>
-          {medications.filter((m: any) => !selectedPerson || m.personId === selectedPerson.id).length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-              {medications
-                .filter((m: any) => !selectedPerson || m.personId === selectedPerson.id)
-                .map((m: any) => {
-                  const isChosen = customTitle === `Take ${m.name} (${m.dosage})`;
-                  return (
-                    <TouchableOpacity
-                      key={m.id}
-                      onPress={() => onCustomTitle(`Take ${m.name} (${m.dosage})`)}
-                      style={[
-                        styles.medChoiceChip,
-                        {
-                          backgroundColor: isChosen ? colors.accentLight : colors.surface,
-                          borderColor: isChosen ? colors.accent : colors.border,
-                          borderRadius: radius.xl,
-                          ...shadows.sm,
-                        },
-                      ]}
-                    >
-                      <Text style={{ fontSize: 16, marginRight: 6 }}>💊</Text>
-                      <View>
-                        <Text style={[{ color: isChosen ? colors.accentDark : colors.text, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
-                          {m.name}
-                        </Text>
-                        <Text style={[{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.body }]}>
-                          {m.dosage}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-            </ScrollView>
+        }
+      >
+        {/* Who */}
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: theme.space.md }}>
+          <Txt v="headline">For</Txt>
+          {needWho && !who ? (
+            <Animated.View entering={reduce ? undefined : FadeInDown.duration(240)}>
+              <Txt v="footnote" tone="warm" accessibilityLiveRegion="polite">
+                Pick who this is for first
+              </Txt>
+            </Animated.View>
           ) : null}
-
-          <TextInput
-            value={customTitle}
-            onChangeText={onCustomTitle}
-            placeholder="e.g. Take Blood Pressure Pill"
-            placeholderTextColor={colors.textTertiary}
-            style={[
-              styles.customInput,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radius.xl,
-                color: colors.text,
-                fontSize: typography.md,
-                fontFamily: fonts.body,
-              },
-            ]}
-          />
         </View>
-      )}
-
-      {selected === 'custom' && (
-        <TextInput
-          value={customTitle}
-          onChangeText={onCustomTitle}
-          placeholder="e.g. Take a deep breath"
-          placeholderTextColor={colors.textTertiary}
-          style={[
-            styles.customInput,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radius.xl,
-              color: colors.text,
-              fontSize: typography.md,
-              fontFamily: fonts.body,
-            },
-          ]}
-        />
-      )}
-    </View>
-  );
-}
-
-// ── Step: When ──────────────────────────────────────────────────────────────────
-function StepWhen({ hour, minute, period, setHour, setMinute, setPeriod, colors, typography, fonts, radius }: any) {
-  return (
-    <View>
-      <Text style={[styles.stepTitle, { color: colors.text, fontSize: typography.xxl, fontFamily: fonts.headingBold }]}>
-        When should it happen?
-      </Text>
-      <Text style={[styles.stepSub, { color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body }]}>
-        Pick the time.
-      </Text>
-      <View
-        style={[
-          styles.timeCard,
-          {
-            backgroundColor: colors.surfaceWarm,
-            borderRadius: radius.xxl,
-          },
-        ]}
-      >
-        <Text style={[styles.timeDisplay, { color: colors.text, fontSize: 52, fontFamily: fonts.headingBold }]}>
-          {hour}:{minute} {period}
-        </Text>
-      </View>
-      <View style={styles.timePickerRow}>
-        <View style={styles.timeCol}>
-          <Text style={[styles.timePickerLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>Hour</Text>
-          {HOURS.map((h) => (
-            <TouchableOpacity
-              key={h}
-              onPress={() => setHour(h)}
-              style={[
-                styles.timeOption,
-                {
-                  backgroundColor: hour === h ? colors.accentLight : 'transparent',
-                  borderRadius: radius.lg,
-                },
-              ]}
+        <Animated.View style={shakeStyle}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}>
+            {everyone.map((p) => {
+              const active = who?.id === p.id;
+              const me = p.id === currentUser.id;
+              return (
+                <Tap
+                  key={p.id}
+                  onPress={() => {
+                    setWho(p);
+                    setNeedWho(false);
+                    haptic.tap();
+                  }}
+                  scaleTo={0.92}
+                  accessibilityRole="button"
+                  accessibilityLabel={me ? 'Me' : p.firstName}
+                  accessibilityState={{ selected: active }}
+                  style={{ alignItems: 'center', width: 68 }}
+                >
+                  <View
+                    style={{
+                      padding: 3,
+                      borderRadius: 40,
+                      borderWidth: 2,
+                      borderColor: active ? c.accent : 'transparent',
+                    }}
+                  >
+                    <Avatar user={p} size={56} label={me ? 'Me' : undefined} />
+                  </View>
+                  <Txt v="footnote" tone={active ? 'accent' : 'secondary'} style={{ marginTop: 6, fontWeight: active ? '600' : '400' }} numberOfLines={1}>
+                    {me ? 'Me' : p.firstName}
+                  </Txt>
+                </Tap>
+              );
+            })}
+            <Tap
+              onPress={() => navigation.navigate('PeopleTab', { screen: 'AddPerson' })}
+              scaleTo={0.92}
+              accessibilityRole="button"
+              accessibilityLabel="Add someone"
+              style={{ alignItems: 'center', width: 68 }}
             >
-              <Text style={[styles.timeOptionText, { color: hour === h ? colors.accent : colors.text, fontFamily: hour === h ? fonts.bodySemibold : fonts.body, fontSize: typography.md }]}>
-                {h}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <View style={styles.timeCol}>
-          <Text style={[styles.timePickerLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>Min</Text>
-          {MINUTES.map((m) => (
-            <TouchableOpacity
-              key={m}
-              onPress={() => setMinute(m)}
-              style={[
-                styles.timeOption,
-                {
-                  backgroundColor: minute === m ? colors.accentLight : 'transparent',
-                  borderRadius: radius.lg,
-                },
-              ]}
-            >
-              <Text style={[styles.timeOptionText, { color: minute === m ? colors.accent : colors.text, fontFamily: minute === m ? fonts.bodySemibold : fonts.body, fontSize: typography.md }]}>
-                {m}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <View style={styles.timeCol}>
-          <Text style={[styles.timePickerLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>AM/PM</Text>
-          {PERIODS.map((p) => (
-            <TouchableOpacity
-              key={p}
-              onPress={() => setPeriod(p)}
-              style={[
-                styles.timeOption,
-                {
-                  backgroundColor: period === p ? colors.accentLight : 'transparent',
-                  borderRadius: radius.lg,
-                },
-              ]}
-            >
-              <Text style={[styles.timeOptionText, { color: period === p ? colors.accent : colors.text, fontFamily: period === p ? fonts.bodySemibold : fonts.body, fontSize: typography.md }]}>
-                {p}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-}
+              <View style={{ padding: 3 }}>
+                <IconWell name="add" size={56} fg={c.accentText} bg={c.accentSoft} />
+              </View>
+              <Txt v="footnote" tone="secondary" style={{ marginTop: 6 }}>
+                Add
+              </Txt>
+            </Tap>
+          </ScrollView>
+        </Animated.View>
 
-// ── Step: Settings ──────────────────────────────────────────────────────────────
-function StepSettings({ repeat, setRepeat, reminderInterval, setReminderInterval, colors, typography, fonts, radius }: any) {
-  return (
-    <View>
-      <Text style={[styles.stepTitle, { color: colors.text, fontSize: typography.xxl, fontFamily: fonts.headingBold }]}>
-        How often?
-      </Text>
-      <Text style={[styles.stepSub, { color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body }]}>
-        Repeat and reminder settings.
-      </Text>
-
-      <Text style={[styles.settingLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
-        REPEAT
-      </Text>
-      {REPEAT_OPTIONS.map((opt) => (
-        <TouchableOpacity
-          key={opt.value}
-          onPress={() => setRepeat(opt.value)}
-          style={[
-            styles.settingRow,
-            {
-              backgroundColor: repeat === opt.value ? colors.accentLight : colors.surface,
-              borderRadius: radius.xl,
-            },
-          ]}
-        >
-          <Text style={[styles.settingRowText, { color: colors.text, fontSize: typography.md, fontFamily: repeat === opt.value ? fonts.bodySemibold : fonts.body }]}>
-            {opt.label}
-          </Text>
-          {repeat === opt.value && <Text style={{ color: colors.accent, fontFamily: fonts.bodySemibold }}>✓</Text>}
-        </TouchableOpacity>
-      ))}
-
-      <Text style={[styles.settingLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold, marginTop: 24 }]}>
-        REMIND EVERY
-      </Text>
-      <View style={styles.reminderGrid}>
-        {REMINDER_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={String(opt.value)}
-            onPress={() => setReminderInterval(opt.value)}
-            style={[
-              styles.reminderChip,
-              {
-                backgroundColor: reminderInterval === opt.value ? colors.accent : colors.surface,
-                borderRadius: radius.full,
-              },
-            ]}
-          >
-            <Text style={[styles.reminderChipText, { color: reminderInterval === opt.value ? '#fff' : colors.text, fontSize: typography.sm, fontFamily: fonts.bodyMedium }]}>
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-// ── Step: Review ──────────────────────────────────────────────────────────────────
-function StepReview({ person, title, emoji, hour, minute, period, repeat, reminderInterval, colors, typography, fonts, radius, shadows }: any) {
-  const rel = person.relationship ? RELATIONSHIP_CONFIG[person.relationship] : null;
-  return (
-    <View>
-      <Text style={[styles.stepTitle, { color: colors.text, fontSize: typography.xxl, fontFamily: fonts.headingBold }]}>
-        Looks good? 👀
-      </Text>
-      <Text style={[styles.stepSub, { color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body }]}>
-        Here's what you're sending.
-      </Text>
-      <View
-        style={[
-          styles.reviewCard,
-          {
-            backgroundColor: colors.surface,
-            borderRadius: radius.xxl,
-            ...shadows.md,
-          },
-        ]}
-      >
-        {/* Person */}
-        <View style={[styles.reviewRow, { borderBottomColor: colors.divider }]}>
-          <Text style={[styles.reviewLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body }]}>To</Text>
-          <View style={styles.reviewPersonRow}>
-            <View style={[styles.miniAvatar, { backgroundColor: person.avatarColor + '18', borderRadius: radius.full }]}>
-              <Text style={[styles.miniAvatarText, { color: person.avatarColor, fontFamily: fonts.heading }]}>{person.firstName.charAt(0)}</Text>
-            </View>
-            <Text style={[styles.reviewValue, { color: colors.text, fontSize: typography.md, fontFamily: fonts.bodySemibold }]}>
-              {person.firstName}
-            </Text>
-            {rel && <Text style={[{ color: colors.textSecondary, fontSize: typography.sm }]}> {rel.emoji}</Text>}
+        {who && !isMe ? (
+          <View style={{ marginTop: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: c.accentSoft, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="paper-plane-outline" size={18} color={c.accent} />
+            <Txt v="footnote" color={c.accentText} style={{ flex: 1, fontWeight: '500' }}>
+              {who.phone || who.email
+                ? `Will ping ${who.firstName} at ${[who.phone, who.email].filter(Boolean).join(' • ')}`
+                : `Will ping ${who.firstName} in-app. Add their phone or email in Circle to ping them via SMS.`}
+            </Txt>
           </View>
-        </View>
+        ) : null}
+
         {/* What */}
-        <View style={[styles.reviewRow, { borderBottomColor: colors.divider }]}>
-          <Text style={[styles.reviewLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body }]}>What</Text>
-          <Text style={[styles.reviewValue, { color: colors.text, fontSize: typography.md, fontFamily: fonts.bodyMedium }]}>
-            {emoji} {title}
-          </Text>
+        {label('What')}
+        <View style={styles.grid}>
+          {CATEGORIES.map((k) => {
+            const active = category === k;
+            const tint = c.category[k];
+            return (
+              <Tap
+                key={k}
+                onPress={() => {
+                  setCategory(k);
+                  setTitle('');
+                }}
+                scaleTo={0.95}
+                accessibilityRole="button"
+                accessibilityLabel={CATEGORY_CONFIG[k].label}
+                accessibilityState={{ selected: active }}
+                style={{ width: '31.5%' }}
+              >
+                <Glass
+                  strong={active}
+                  style={{
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingVertical: 14,
+                    paddingHorizontal: 6,
+                    borderColor: active ? c.accent : c.glassEdge,
+                    borderWidth: active ? 1.5 : StyleSheet.hairlineWidth * 2,
+                  }}
+                >
+                  <IconWell name={CATEGORY_CONFIG[k].icon} size={38} fg={tint.fg} bg={tint.bg} />
+                  <Txt v="footnote" style={{ fontWeight: active ? '600' : '500' }}>
+                    {CATEGORY_CONFIG[k].label}
+                  </Txt>
+                </Glass>
+              </Tap>
+            );
+          })}
         </View>
+
+        {category === 'medicine' && meds.length > 0 && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: theme.space.md }}>
+            {meds.map((m) => {
+              const t = `Take ${m.name} (${m.dosage})`;
+              return <Chip key={m.id} label={`${m.name} ${m.dosage}`} icon="medkit-outline" selected={title === t} onPress={() => setTitle(t)} />;
+            })}
+          </View>
+        )}
+
+        <Glass strong padded={false} radius={18} style={{ marginTop: theme.space.md }}>
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            placeholder={SUGGESTED[category] || 'What should they do?'}
+            placeholderTextColor={c.textTertiary}
+            selectionColor={c.accent}
+            maxLength={60}
+            accessibilityLabel="Nudge title"
+            style={[theme.type.body, { color: c.text, paddingHorizontal: 18, paddingVertical: 16 }]}
+          />
+        </Glass>
+
         {/* When */}
-        <View style={[styles.reviewRow, { borderBottomColor: colors.divider }]}>
-          <Text style={[styles.reviewLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body }]}>When</Text>
-          <Text style={[styles.reviewValue, { color: colors.text, fontSize: typography.md, fontFamily: fonts.bodyMedium }]}>
-            {hour}:{minute} {period}
-          </Text>
+        {label('When')}
+        <Glass strong style={{ alignItems: 'center', paddingVertical: theme.space.xl }}>
+          <Txt v="display" accessibilityLabel={`Time ${label12(hour, minute)}`}>
+            {label12(hour, minute)}
+          </Txt>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: theme.space.lg }}>
+            <Stepper text="−1h" label="One hour earlier" onPress={() => nudgeTime(-60)} />
+            <Stepper text="+1h" label="One hour later" onPress={() => nudgeTime(60)} />
+            <Stepper text="−15m" label="15 minutes earlier" onPress={() => nudgeTime(-15)} />
+            <Stepper text="+15m" label="15 minutes later" onPress={() => nudgeTime(15)} />
+          </View>
+        </Glass>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: theme.space.md }}>
+          {PRESETS.map((p) => (
+            <Chip
+              key={p.label}
+              label={`${p.label} · ${label12(p.h, p.m).replace(':00', '')}`}
+              selected={hour === p.h && minute === p.m}
+              onPress={() => {
+                setHour(p.h);
+                setMinute(p.m);
+              }}
+            />
+          ))}
         </View>
-        {/* Repeat */}
-        <View style={[styles.reviewRow, { borderBottomColor: colors.divider }]}>
-          <Text style={[styles.reviewLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body }]}>Repeat</Text>
-          <Text style={[styles.reviewValue, { color: colors.text, fontSize: typography.md, fontFamily: fonts.bodyMedium }]}>
-            {REPEAT_OPTIONS.find((o) => o.value === repeat)?.label}
-          </Text>
+
+        {label('Repeat')}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {REPEATS.map((r) => (
+            <Chip key={r.value} label={r.label} selected={repeat === r.value} onPress={() => setRepeat(r.value)} />
+          ))}
         </View>
-        {/* Reminder */}
-        <View style={styles.reviewRow}>
-          <Text style={[styles.reviewLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.body }]}>Reminder</Text>
-          <Text style={[styles.reviewValue, { color: colors.text, fontSize: typography.md, fontFamily: fonts.bodyMedium }]}>
-            Every {reminderInterval} min
-          </Text>
-        </View>
-      </View>
+
+        {label('Keep pinging every')}
+        <Segmented options={INTERVALS.map((i) => ({ value: String(i.value), label: i.label }))} value={String(interval)} onChange={(v) => setIntervalMin(Number(v) as ReminderInterval)} />
+        <Txt v="footnote" tone="secondary" style={{ marginTop: 8 }}>
+          Until {isMe ? 'you tap' : who ? `${who.firstName} taps` : 'they tap'} Done. Quiet hours hold follow-ups overnight.
+        </Txt>
+
+        {/* Preview of the notification itself */}
+        {label('They’ll see')}
+        <Glass lifted radius={22}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+              <Mark size={15} color={c.onAccent} wave={c.onAccent} />
+            </View>
+            <Txt v="caption" tone="secondary" style={{ flex: 1 }}>
+              {APP_NAME.toUpperCase()}
+            </Txt>
+            <Txt v="caption" tone="tertiary">
+              {label12(hour, minute)}
+            </Txt>
+          </View>
+          <Txt v="headline" style={{ marginTop: 8 }}>
+            {finalTitle || 'Your nudge'}
+          </Txt>
+          <Txt v="footnote" tone="secondary" style={{ marginTop: 2 }}>
+            {isMe ? 'A little reminder for you' : `A little reminder from ${currentUser.firstName}`}
+          </Txt>
+        </Glass>
+      </Screen>
+
+      {sent && (
+        <Animated.View
+          entering={reduce ? undefined : FadeIn.duration(220)}
+          exiting={reduce ? undefined : FadeOut.duration(200)}
+          style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim, alignItems: 'center', justifyContent: 'center', padding: 32 }]}
+        >
+          <Animated.View entering={reduce ? undefined : ZoomIn.springify().damping(16)} style={{ width: '100%', maxWidth: 340 }}>
+            <Glass strong lifted radius={32} style={{ alignItems: 'center', paddingVertical: 36 }}>
+              <Mark size={64} />
+              <Txt v="title" style={{ marginTop: 12 }}>
+                {isMe ? 'Reminder set' : 'Nudge sent'}
+              </Txt>
+              <Txt v="callout" tone="secondary" style={{ marginTop: 6, textAlign: 'center' }}>
+                {isMe ? 'We’ll keep checking in until you tap Done.' : `We’ll keep checking in until ${who?.firstName}’s done.`}
+              </Txt>
+            </Glass>
+          </Animated.View>
+        </Animated.View>
+      )}
     </View>
+  );
+}
+
+function Stepper({ text, label, onPress }: { text: string; label: string; onPress: () => void }) {
+  const { theme } = useTheme();
+  return (
+    <Tap
+      onPress={() => {
+        haptic.tap();
+        onPress();
+      }}
+      scaleTo={0.92}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={{
+        minWidth: 60,
+        height: 44,
+        paddingHorizontal: 12,
+        borderRadius: 22,
+        backgroundColor: theme.c.glass,
+        borderWidth: StyleSheet.hairlineWidth * 2,
+        borderColor: theme.c.glassEdge,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Txt v="subhead" style={{ fontVariant: ['tabular-nums'] }}>
+        {text}
+      </Txt>
+    </Tap>
   );
 }
 
 const styles = StyleSheet.create({
-  successContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  successEmoji: { fontSize: 64, marginBottom: 24 },
-  successTitle: { marginBottom: 10 },
-  successSub: { textAlign: 'center' },
-  navHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  backBtn: { width: 60 },
-  backText: {},
-  navTitle: {},
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 16,
-  },
-  dot: {
-    height: 8,
-    borderRadius: 4,
-  },
-  content: {
-    paddingTop: 28,
-    paddingBottom: 48,
-  },
-  stepTitle: {
-    marginBottom: 10,
-  },
-  stepSub: {
-    marginBottom: 28,
-  },
-  personOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    padding: 18,
-    marginBottom: 12,
-  },
-  personAvatar: {
-    width: 50,
-    height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  personAvatarText: {
-    fontSize: 20,
-  },
-  personOptionName: {},
-  personOptionRel: {},
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
-  },
-  categoryChip: {
-    width: '30%',
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexGrow: 1,
-  },
-  catLabel: { textAlign: 'center' },
-  customInput: {
-    borderWidth: 1.5,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    marginTop: 4,
-  },
-  timeCard: {
-    alignItems: 'center',
-    paddingVertical: 36,
-    marginBottom: 28,
-  },
-  timeDisplay: {
-    letterSpacing: -2,
-  },
-  timePickerRow: {
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  timeCol: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  timePickerLabel: {
-    marginBottom: 12,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  timeOption: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 4,
-    width: '100%',
-    alignItems: 'center',
-  },
-  timeOptionText: {},
-  settingLabel: {
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    marginBottom: 8,
-  },
-  settingRowText: {},
-  reminderGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  reminderChip: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  reminderChipText: {},
-  reviewCard: {
-    overflow: 'hidden',
-  },
-  reviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 22,
-    paddingVertical: 18,
-    borderBottomWidth: 1,
-  },
-  reviewLabel: {
-    width: 80,
-  },
-  reviewPersonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  miniAvatar: {
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniAvatarText: {
-    fontSize: 12,
-  },
-  reviewValue: {
-    flex: 1,
-    textAlign: 'right',
-  },
-  bottomBar: {
-    paddingVertical: 18,
-  },
-  nextBtn: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  nextBtnText: {},
-  routineCallout: {},
-  medChoiceChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    marginRight: 8,
-  },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 },
 });

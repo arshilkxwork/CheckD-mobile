@@ -1,0 +1,422 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-13T22:07:31.549351+00:00",
+  "title": "Design System: Pingkin",
+  "extensions": {
+    "colorMeta": {
+      "light-ground": {
+        "role": "neutral",
+        "displayName": "Morning Mist",
+        "canonical": "#E9EFE8",
+        "tonalRamp": [
+          "#212D1F",
+          "#384B34",
+          "#4E6949",
+          "#64875E",
+          "#86A781",
+          "#A9C0A5",
+          "#CEDBCC",
+          "#F1F5F0"
+        ]
+      },
+      "light-ink": {
+        "role": "neutral",
+        "displayName": "Deep Green Ink",
+        "canonical": "#18241C",
+        "tonalRamp": [
+          "#1F2E24",
+          "#334C3C",
+          "#476B53",
+          "#5C8A6B",
+          "#7EA98D",
+          "#A3C2AD",
+          "#CBDCD1",
+          "#F0F5F1"
+        ]
+      },
+      "light-ink-secondary": {
+        "role": "neutral",
+        "displayName": "Moss Grey",
+        "canonical": "#4B5C50",
+        "tonalRamp": [
+          "#222A25",
+          "#39463D",
+          "#506256",
+          "#677E6E",
+          "#899F8F",
+          "#ABBAAF",
+          "#CFD8D2",
+          "#F1F4F2"
+        ]
+      },
+      "light-ink-tertiary": {
+        "role": "neutral",
+        "displayName": "Lichen Grey",
+        "canonical": "#64766A",
+        "tonalRamp": [
+          "#232925",
+          "#3A453E",
+          "#526157",
+          "#697C70",
+          "#8B9D91",
+          "#ACB9B0",
+          "#D0D7D2",
+          "#F1F3F2"
+        ]
+      },
+      "light-sage": {
+        "role": "primary",
+        "displayName": "Sage",
+        "canonical": "#4C7D59",
+        "tonalRamp": [
+          "#1D3022",
+          "#304F38",
+          "#436F4F",
+          "#578F66",
+          "#7AAE88",
+          "#A0C5AA",
+          "#C9DECF",
+          "#EFF5F1"
+        ]
+      },
+      "light-sage-text": {
+        "role": "primary",
+        "displayName": "Sage Text",
+        "canonical": "#3B6847",
+        "tonalRamp": [
+          "#1C3121",
+          "#2E5138",
+          "#41724E",
+          "#539264",
+          "#76B186",
+          "#9DC8A9",
+          "#C8E0CE",
+          "#EFF6F1"
+        ]
+      },
+      "light-amber": {
+        "role": "secondary",
+        "displayName": "Amber",
+        "canonical": "#9C6427",
+        "tonalRamp": [
+          "#3D270F",
+          "#664119",
+          "#8F5C24",
+          "#B8762E",
+          "#D49754",
+          "#E0B485",
+          "#EED5BA",
+          "#FAF3EB"
+        ]
+      },
+      "light-clay": {
+        "role": "tertiary",
+        "displayName": "Clay",
+        "canonical": "#9E4F3F",
+        "tonalRamp": [
+          "#371B16",
+          "#5B2E24",
+          "#804033",
+          "#A45241",
+          "#C27566",
+          "#D39D92",
+          "#E6C7C1",
+          "#F8EFED"
+        ]
+      },
+      "dark-ground": {
+        "role": "neutral",
+        "displayName": "Forest Night",
+        "canonical": "#0D1813",
+        "tonalRamp": [
+          "#1B3227",
+          "#2D5341",
+          "#3F745C",
+          "#519576",
+          "#74B497",
+          "#9CC9B5",
+          "#C7E1D5",
+          "#EEF6F3"
+        ]
+      },
+      "dark-ink": {
+        "role": "neutral",
+        "displayName": "Pale Leaf Ink",
+        "canonical": "#E6EEE7",
+        "tonalRamp": [
+          "#1F2E21",
+          "#344C37",
+          "#486A4C",
+          "#5D8962",
+          "#7FA885",
+          "#A4C1A8",
+          "#CBDCCD",
+          "#F0F5F0"
+        ]
+      },
+      "dark-ink-secondary": {
+        "role": "neutral",
+        "displayName": "Moss Grey (night)",
+        "canonical": "#A8BAAD",
+        "tonalRamp": [
+          "#222B24",
+          "#38473C",
+          "#4F6455",
+          "#66806D",
+          "#88A08E",
+          "#AABBAF",
+          "#CFD9D1",
+          "#F1F4F2"
+        ]
+      },
+      "dark-ink-tertiary": {
+        "role": "neutral",
+        "displayName": "Lichen Grey (night)",
+        "canonical": "#86998B",
+        "tonalRamp": [
+          "#232A25",
+          "#3A453D",
+          "#526156",
+          "#697D6E",
+          "#8B9D90",
+          "#ACB9AF",
+          "#D0D7D2",
+          "#F1F3F2"
+        ]
+      },
+      "dark-lichen": {
+        "role": "primary",
+        "displayName": "Lichen",
+        "canonical": "#B6D3A3",
+        "tonalRamp": [
+          "#233419",
+          "#3B5629",
+          "#53793A",
+          "#6A9B4A",
+          "#8CBA6E",
+          "#ADCD98",
+          "#D0E3C4",
+          "#F1F7EE"
+        ]
+      },
+      "dark-on-lichen": {
+        "role": "primary",
+        "displayName": "Ink on Lichen",
+        "canonical": "#10201A",
+        "tonalRamp": [
+          "#1A3329",
+          "#2B5545",
+          "#3C7761",
+          "#4D997C",
+          "#70B89D",
+          "#99CCB9",
+          "#C5E2D7",
+          "#EEF6F3"
+        ]
+      },
+      "dark-amber": {
+        "role": "secondary",
+        "displayName": "Amber (night)",
+        "canonical": "#E6BA80",
+        "tonalRamp": [
+          "#402A0D",
+          "#6B4615",
+          "#95611D",
+          "#C07D26",
+          "#DC9E4C",
+          "#E6BA7F",
+          "#F1D8B7",
+          "#FBF3EA"
+        ]
+      },
+      "dark-clay": {
+        "role": "tertiary",
+        "displayName": "Clay (night)",
+        "canonical": "#E5A291",
+        "tonalRamp": [
+          "#3E180F",
+          "#672818",
+          "#903822",
+          "#BA492C",
+          "#D66D52",
+          "#E29683",
+          "#EEC4B9",
+          "#FAEEEA"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Receiver nudge title, big times, streak numbers."
+      },
+      "large-title": {
+        "displayName": "Large Title",
+        "purpose": "Top-level screen titles and the Home greeting; collapses into the bar on scroll."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Names, stats, sheet success states."
+      },
+      "title2": {
+        "displayName": "Title 2",
+        "purpose": "Section headings and card titles."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Row titles and button labels (platform sans)."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Reading text (platform sans)."
+      },
+      "footnote": {
+        "displayName": "Footnote",
+        "purpose": "Meta lines under titles."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Tags, tab labels, small counts."
+      }
+    },
+    "shadows": [
+      {
+        "name": "soft",
+        "value": "0 6px 18px rgba(36,56,42,0.09)",
+        "purpose": "Every glass panel at rest (dark: black at 0.32)."
+      },
+      {
+        "name": "lifted",
+        "value": "0 14px 32px rgba(36,56,42,0.12)",
+        "purpose": "Hero panels and the floating tab bar."
+      },
+      {
+        "name": "accent",
+        "value": "0 8px 18px rgba(76,125,89,0.14)",
+        "purpose": "Primary buttons and the create button."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press",
+        "value": "scale 0.97 in 110ms; spring back (damping 16, stiffness 260)",
+        "purpose": "Feedback on every pressable."
+      },
+      {
+        "name": "done-moment",
+        "value": "fill spring (damping 15, stiffness 240) + 520ms ripple ease-out-cubic; complete after 480ms",
+        "purpose": "The Done check, the one authored moment."
+      },
+      {
+        "name": "list-reflow",
+        "value": "LinearTransition spring (damping 22, stiffness 180); fade in 380ms, out 220ms",
+        "purpose": "Nudges moving between sections."
+      },
+      {
+        "name": "header-collapse",
+        "value": "scroll-linked: large title fades/lifts 10px over 0–52pt; bar fades in 28–60pt",
+        "purpose": "Large title to frosted inline bar."
+      },
+      {
+        "name": "backdrop-parallax",
+        "value": "translateY 0 → -260 over 2000pt scroll; 1.08 stretch on pull",
+        "purpose": "Leaf backdrop drifts slower than content."
+      },
+      {
+        "name": "entrance",
+        "value": "FadeInDown spring, 55ms stagger capped at 6",
+        "purpose": "First mount of lists; skipped under Reduce Motion."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary-light",
+      "description": "The one filled action per screen.",
+      "html": "<button class=\"ds-btn-primary\">Send to Sarah</button>",
+      "css": ".ds-btn-primary{background:#4C7D59;color:#fff;height:50px;padding:0 24px;border:none;border-radius:999px;font:600 17px/22px system-ui;box-shadow:0 8px 18px rgba(76,125,89,.25);transition:transform .11s}.ds-btn-primary:active{transform:scale(.97)}.ds-btn-primary:focus-visible{outline:2px solid #3B6847;outline-offset:3px}"
+    },
+    {
+      "name": "Glass Button",
+      "kind": "button",
+      "refersTo": "button-primary-light",
+      "description": "Secondary action on glass.",
+      "html": "<button class=\"ds-btn-glass\">Snooze 15 min</button>",
+      "css": ".ds-btn-glass{background:rgba(255,255,255,.74);color:#18241C;height:50px;padding:0 24px;border:1px solid rgba(255,255,255,.9);border-radius:999px;font:600 17px/22px system-ui;transition:transform .11s}.ds-btn-glass:active{transform:scale(.97)}.ds-btn-glass:focus-visible{outline:2px solid #4C7D59;outline-offset:3px}"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Filters and single choices.",
+      "html": "<button class=\"ds-chip\">Daily</button><button class=\"ds-chip ds-chip-on\">Weekdays</button>",
+      "css": ".ds-chip{height:40px;padding:0 16px;margin-right:8px;border-radius:20px;background:rgba(255,255,255,.74);border:1px solid rgba(255,255,255,.9);color:#18241C;font:500 14px/19px system-ui}.ds-chip-on{background:#4C7D59;border-color:#4C7D59;color:#fff}.ds-chip:focus-visible{outline:2px solid #4C7D59;outline-offset:2px}"
+    },
+    {
+      "name": "Glass Nudge Row",
+      "kind": "card",
+      "refersTo": "glass-card",
+      "description": "A nudge with its category well and Done check.",
+      "html": "<div class=\"ds-row\"><span class=\"ds-well\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#3F7398\" stroke-width=\"1.8\"><path d=\"M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z\"/></svg></span><span class=\"ds-txt\"><b>Drink a glass of water</b><small>For you · 9:00 PM · Daily</small></span><span class=\"ds-check\"></span></div>",
+      "css": ".ds-row{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:22px;background:rgba(255,255,255,.52);border:1px solid rgba(255,255,255,.9);box-shadow:0 6px 18px rgba(36,56,42,.09);font-family:system-ui;color:#18241C}.ds-well{width:44px;height:44px;border-radius:22px;background:rgba(63,115,152,.14);display:grid;place-items:center}.ds-txt{flex:1;display:flex;flex-direction:column;gap:3px}.ds-txt b{font:600 17px/22px system-ui}.ds-txt small{font:400 13px/18px system-ui;color:#4B5C50}.ds-check{width:44px;height:44px;border-radius:22px;border:1.5px solid rgba(24,36,28,.22);background:rgba(255,255,255,.74)}.ds-row:hover .ds-check{border-color:#4C7D59}"
+    },
+    {
+      "name": "Floating Tab Bar",
+      "kind": "nav",
+      "refersTo": "icon-button",
+      "description": "Glass pill with four tabs around the create button.",
+      "html": "<nav class=\"ds-tabs\"><a class=\"on\">Home</a><a>Circle</a><button class=\"ds-plus\">+</button><a>History</a><a>You</a></nav>",
+      "css": ".ds-tabs{display:flex;align-items:center;justify-content:space-around;height:68px;border-radius:34px;background:rgba(250,252,249,.78);border:1px solid rgba(255,255,255,.9);backdrop-filter:blur(20px);box-shadow:0 14px 32px rgba(36,56,42,.12);font:500 11px system-ui;color:#4B5C50}.ds-tabs a{padding:8px 12px;border-radius:22px}.ds-tabs a.on{background:rgba(76,125,89,.13);color:#3B6847;font-weight:600}.ds-plus{width:52px;height:52px;border-radius:26px;border:none;background:#4C7D59;color:#fff;font-size:28px}.ds-tabs a:hover{color:#18241C}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Mist & Forest",
+    "overview": "Opening the app should feel like stepping into a quiet greenhouse: morning mist in light mode, a forest at night in dark mode. Every screen sits on one pre-blurred botanical backdrop that drifts slower than the content, with frosted glass panels carrying the content. Status is told in muted tones, never red badges or alarms; one moment, tapping Done, gets real choreography.",
+    "keyCharacteristics": [
+      "One shared blurred-leaf backdrop per appearance, with 0.25x scroll parallax",
+      "Frosted glass panels: translucent fill, bright hairline edge, soft offset shadow",
+      "Serif (Instrument Serif) for titles, names and numbers; system sans for UI",
+      "Thin Ionicons outline icons in round tinted wells; no emoji in the interface",
+      "Large titles that collapse into a frosted inline bar on scroll",
+      "Light and dark are first-class, following the system unless set in the You tab"
+    ],
+    "rules": [
+      {
+        "name": "The Calm Status Rule",
+        "body": "State colour is told with a tinted well or tag (fg plus a 14% bg of the same hue), never a solid red or orange block. Missed is clay, waiting is amber, done is sage.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Green Rule",
+        "body": "Sage (light) or lichen (dark) is the only saturated fill on a screen. Category tints stay at 14–15% behind their icons.",
+        "section": "colors"
+      },
+      {
+        "name": "The Serif-For-People Rule",
+        "body": "People's names, screen titles and counts take the serif; controls, labels and meta never do.",
+        "section": "typography"
+      },
+      {
+        "name": "The Glass-Has-A-Job Rule",
+        "body": "Glass groups content over the backdrop. Glass is never nested inside glass, and blur is reserved for chrome that content passes under.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do start every screen from the `Screen` scaffold (`src/ui/Screen.tsx`) so the backdrop, parallax and collapsing header stay consistent.",
+      "Do use `Txt` variants and `theme.c` tokens; never hard-code a hex in a screen.",
+      "Do put state in tinted tags and wells (Calm Status Rule).",
+      "Do keep tap targets at 44px or more and give icon-only buttons an accessibilityLabel.",
+      "Do gate every entrance, parallax and ripple on `useReducedMotion()`."
+    ],
+    "donts": [
+      "Don't use emoji as interface icons. Emoji belong only to user content (cheers, bios).",
+      "Don't nest glass in glass or add blur to content panels.",
+      "Don't use solid red, alarm badges or guilt copy for missed or overdue states.",
+      "Don't set a serif on controls or meta text.",
+      "Don't add Android `elevation` to translucent panels."
+    ]
+  }
+}

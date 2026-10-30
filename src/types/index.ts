@@ -71,6 +71,8 @@ export interface Nudge {
   accountabilityLevel: AccountabilityLevel;
   completedAt?: string;
   snoozedUntil?: string;
+  /** Start of the occurrence the current status refers to (repeating nudges). */
+  dueAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -257,6 +259,8 @@ export interface AppState {
   medicationLogs: MedicationLog[];
   theme: ThemeMode;
   isOnboarded: boolean;
+  authToken?: string | null;
+  isAuthenticated?: boolean;
 }
 
 

@@ -31,7 +31,14 @@ export function calculateStreak(
   const totalCompletedHist = filteredHistory.filter((h) => h.status === 'completed').length;
   const totalMissedHist = filteredHistory.filter((h) => h.status === 'missed').length;
 
-  const todayCompleted = filteredToday.filter((n) => n.status === 'completed').length;
+  // Completing a nudge also writes a history entry; don't count those twice.
+  const todayKey = new Date().toISOString().split('T')[0];
+  const loggedToday = new Set(
+    filteredHistory.filter((h) => h.date === todayKey && h.status === 'completed').map((h) => h.nudgeId)
+  );
+  const todayCompleted = filteredToday.filter(
+    (n) => n.status === 'completed' && !loggedToday.has(n.id)
+  ).length;
   const todayPending = filteredToday.filter((n) => n.status === 'pending' || n.status === 'snoozed').length;
 
   const totalCompleted = totalCompletedHist + todayCompleted;
@@ -57,7 +64,7 @@ export function calculateStreak(
   const todayStr = now.toISOString().split('T')[0];
 
   let currentStreak = 0;
-  if (todayCompleted > 0) {
+  if (todayCompleted > 0 || (byDate[todayStr]?.completed ?? 0) > 0) {
     currentStreak += 1;
   }
 
@@ -102,14 +109,10 @@ export function calculateStreak(
     prevTime = thisTime;
   }
 
-  // Give a friendly minimum realistic streak for demo context if history exists
-  const finalCurrentStreak = Math.max(currentStreak, totalCompleted > 0 ? 3 : 0);
-  const finalLongest = Math.max(longestStreak, finalCurrentStreak, 5);
-
   return {
-    currentStreak: finalCurrentStreak,
-    longestStreak: finalLongest,
-    lastCompletedDate: todayCompleted > 0 ? todayStr : undefined,
+    currentStreak,
+    longestStreak,
+    lastCompletedDate: currentStreak > 0 && (todayCompleted > 0 || byDate[todayStr]) ? todayStr : undefined,
     completionRate,
     totalCompleted,
     totalScheduled,
@@ -244,12 +247,14 @@ export function calculatePersonInsights(
   const weeklyActivity = getWeeklyActivity(history, nudges, person.id);
   const topCategories = calculateCategoryDistribution(history, nudges, person.id);
 
-  // Average response time simulation: 12-24 mins based on person id
-  const avgMinutes = person.id.includes('dad')
-    ? 15
-    : person.id.includes('sarah')
-    ? 12
-    : 22;
+  // Minutes from the time a nudge was due to when it was marked done.
+  const delays = nudges
+    .filter((n) => n.receiverId === person.id && n.status === 'completed' && n.completedAt)
+    .map((n) => (new Date(n.completedAt!).getTime() - new Date(n.dueAt ?? n.scheduledTime).getTime()) / 60000)
+    .filter((m) => m >= 0 && m < 24 * 60);
+  const avgMinutes = delays.length
+    ? Math.round(delays.reduce((a, b) => a + b, 0) / delays.length)
+    : 0;
 
   return {
     personId: person.id,
@@ -294,7 +299,6 @@ export function evaluateMilestones(
       icon: '🌱',
       category: 'general',
       unlocked: allCompleted >= 1,
-      unlockedAt: '2026-01-16T09:00:00Z',
       current: Math.min(allCompleted, 1),
       target: 1,
     },
@@ -305,7 +309,6 @@ export function evaluateMilestones(
       icon: '🔥',
       category: 'general',
       unlocked: overallStreak >= 3,
-      unlockedAt: overallStreak >= 3 ? '2026-10-09T18:00:00Z' : undefined,
       current: Math.min(overallStreak, 3),
       target: 3,
     },
@@ -326,7 +329,6 @@ export function evaluateMilestones(
       icon: '💊',
       category: 'medicine',
       unlocked: medCompleted >= 5,
-      unlockedAt: medCompleted >= 5 ? '2026-10-10T08:47:00Z' : undefined,
       current: Math.min(medCompleted, 5),
       target: 5,
     },

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import {
   CURRENT_USER,
   MOCK_PEOPLE,
@@ -20,6 +20,9 @@ import {
 import { CARE_ROUTINE_TEMPLATES } from '../data/routineTemplates';
 import { MOCK_MEDICATIONS, MOCK_MEDICATION_LOGS } from '../data/medicationData';
 import { getFormEmoji } from '../utils/medications';
+import { loadState, saveState, clearState } from '../services/storage';
+import { rollOver, nextTimeOfDay, dismissDelivered, cancelAllReminders } from '../services/reminders';
+import { authService, setAuthToken } from '../services';
 
 interface AppContextValue {
   currentUser: User;
@@ -54,11 +57,45 @@ interface AppContextValue {
   setThemeMode: (m: ThemeMode) => void;
   isOnboarded: boolean;
   setOnboarded: () => void;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (name: string, email: string, password: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  /** True once saved state has been read from the device. */
+  hydrated: boolean;
+  completeOnboarding: (firstName: string, withSampleData: boolean) => void;
+  resetApp: () => Promise<void>;
+  /** Advance repeating nudges to their current occurrence and log misses. */
+  refreshSchedules: () => void;
 }
 
 const AppContext = createContext<AppContextValue>({} as AppContextValue);
 
-const INITIAL_CHEERS: Cheer[] = [
+const NEW_USER: User = {
+  id: 'user-me',
+  name: '',
+  firstName: '',
+  avatarColor: '#6B9E7E',
+  accountabilityLevel: 'checkin',
+  privacy: {
+    showCompletedTasks: true,
+    showExactTimes: true,
+    showMedicationNames: false,
+    shareHistory: true,
+    requireProof: false,
+  },
+  notificationPrefs: {
+    enabled: true,
+    reminderInterval: 15,
+    quietHoursStart: '22:00',
+    quietHoursEnd: '07:00',
+    sounds: true,
+    vibration: true,
+  },
+  createdAt: new Date().toISOString(),
+};
+
+const SAMPLE_CHEERS: Cheer[] = [
   {
     id: 'cheer-1',
     personId: 'user-dad',
@@ -70,17 +107,155 @@ const INITIAL_CHEERS: Cheer[] = [
 ];
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User>(CURRENT_USER);
-  const [people, setPeople] = useState<User[]>(MOCK_PEOPLE);
-  const [nudges, setNudges] = useState<Nudge[]>(MOCK_NUDGES);
-  const [history, setHistory] = useState<HistoryEntry[]>(MOCK_HISTORY);
-  const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
-  const [cheers, setCheers] = useState<Cheer[]>(INITIAL_CHEERS);
-  const [medications, setMedications] = useState<Medication[]>(MOCK_MEDICATIONS);
-  const [medicationLogs, setMedicationLogs] = useState<MedicationLog[]>(MOCK_MEDICATION_LOGS);
+  const [currentUser, setCurrentUser] = useState<User>(NEW_USER);
+  const [people, setPeople] = useState<User[]>([]);
+  const [nudges, setNudges] = useState<Nudge[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [cheers, setCheers] = useState<Cheer[]>([]);
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [medicationLogs, setMedicationLogs] = useState<MedicationLog[]>([]);
   const [themeMode] = useState<ThemeMode>('light');
   const setThemeMode = useCallback((_m: ThemeMode) => {}, []);
   const [isOnboarded, setIsOnboarded] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authTokenState, setAuthTokenState] = useState<string | null>(null);
+
+  // ── Load saved state once, then save on every change ──
+  useEffect(() => {
+    loadState().then((saved) => {
+      if (saved) {
+        setCurrentUser(saved.currentUser);
+        setPeople(saved.people);
+        setNudges(saved.nudges);
+        setHistory(saved.history);
+        setNotifications(saved.notifications);
+        setCheers(saved.cheers);
+        setMedications(saved.medications);
+        setMedicationLogs(saved.medicationLogs);
+        setIsOnboarded(saved.isOnboarded);
+        if (saved.authToken) {
+          setAuthToken(saved.authToken);
+          setAuthTokenState(saved.authToken);
+          setIsAuthenticated(true);
+        } else if (saved.isAuthenticated) {
+          setIsAuthenticated(true);
+        }
+      }
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const t = setTimeout(() => {
+      saveState({
+        currentUser, people, nudges, history, notifications,
+        cheers, medications, medicationLogs, isOnboarded,
+        authToken: authTokenState, isAuthenticated,
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [hydrated, currentUser, people, nudges, history, notifications, cheers, medications, medicationLogs, isOnboarded, authTokenState, isAuthenticated]);
+
+  const refreshSchedules = useCallback(() => {
+    const { nudges: next, missed } = rollOver(nudges);
+    if (next === nudges) return;
+    setNudges(next);
+    if (missed.length === 0) return;
+
+    const entries: HistoryEntry[] = missed.map((n, i) => {
+      const person = people.find((p) => p.id === n.receiverId);
+      return {
+        id: `hist-missed-${Date.now()}-${i}`,
+        nudgeId: n.id,
+        nudge: { title: n.title, emoji: n.emoji, category: n.category },
+        personId: n.receiverId,
+        personName: person?.name || (n.receiverId === currentUser.id ? currentUser.name : 'Someone'),
+        date: (n.dueAt ?? n.scheduledTime).split('T')[0],
+        status: 'missed',
+      };
+    });
+    setHistory((prev) => [...entries, ...prev]);
+  }, [nudges, people, currentUser]);
+
+  const completeOnboarding = useCallback((firstName: string, withSampleData: boolean) => {
+    const name = firstName.trim();
+    if (withSampleData) {
+      setCurrentUser({ ...CURRENT_USER, name, firstName: name });
+      setPeople(MOCK_PEOPLE);
+      setNudges(MOCK_NUDGES);
+      setHistory(MOCK_HISTORY);
+      setNotifications(MOCK_NOTIFICATIONS);
+      setCheers(SAMPLE_CHEERS);
+      setMedications(MOCK_MEDICATIONS);
+      setMedicationLogs(MOCK_MEDICATION_LOGS);
+    } else {
+      setCurrentUser({ ...NEW_USER, name, firstName: name, createdAt: new Date().toISOString() });
+    }
+    setIsOnboarded(true);
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const res = await authService.login(email, password);
+    if (res.success && res.user) {
+      setCurrentUser(res.user);
+      if (res.token) {
+        setAuthToken(res.token);
+        setAuthTokenState(res.token);
+      }
+      setIsAuthenticated(true);
+      setIsOnboarded(true);
+      setPeople((prev) => (prev.length === 0 ? MOCK_PEOPLE : prev));
+      setNudges((prev) => (prev.length === 0 ? MOCK_NUDGES : prev));
+      setMedications((prev) => (prev.length === 0 ? MOCK_MEDICATIONS : prev));
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Invalid credentials' };
+  }, []);
+
+  const signup = useCallback(async (name: string, email: string, password: string, phone?: string) => {
+    const res = await authService.signup({ name, email, password, phone });
+    if (res.success && res.user) {
+      setCurrentUser(res.user);
+      if (res.token) {
+        setAuthToken(res.token);
+        setAuthTokenState(res.token);
+      }
+      setIsAuthenticated(true);
+      setIsOnboarded(true);
+      setPeople((prev) => (prev.length === 0 ? MOCK_PEOPLE : prev));
+      setNudges((prev) => (prev.length === 0 ? MOCK_NUDGES : prev));
+      setMedications((prev) => (prev.length === 0 ? MOCK_MEDICATIONS : prev));
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Registration failed' };
+  }, []);
+
+  const logout = useCallback(async () => {
+    await authService.logout().catch(() => {});
+    setAuthToken(null);
+    setAuthTokenState(null);
+    setIsAuthenticated(false);
+  }, []);
+
+  const resetApp = useCallback(async () => {
+    await cancelAllReminders();
+    await clearState();
+    setAuthToken(null);
+    setAuthTokenState(null);
+    setIsAuthenticated(false);
+    setCurrentUser(NEW_USER);
+    setPeople([]);
+    setNudges([]);
+    setHistory([]);
+    setNotifications([]);
+    setCheers([]);
+    setMedications([]);
+    setMedicationLogs([]);
+    setIsOnboarded(false);
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -93,7 +268,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addNudge = useCallback((n: Nudge) => {
-    setNudges((prev) => [n, ...prev]);
+    setNudges((prev) => [{ ...n, dueAt: n.dueAt ?? n.scheduledTime }, ...prev]);
   }, []);
 
   const updateNudge = useCallback((id: string, updates: Partial<Nudge>) => {
@@ -115,10 +290,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNudges((prev) =>
       prev.map((n) =>
         n.id === id
-          ? { ...n, status: 'completed' as NudgeStatus, completedAt: now, updatedAt: now }
+          ? { ...n, status: 'completed' as NudgeStatus, completedAt: now, snoozedUntil: undefined, updatedAt: now }
           : n
       )
     );
+    dismissDelivered(id);
 
     const nudge = nudges.find((n) => n.id === id);
     if (nudge) {
@@ -181,6 +357,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const snoozeNudge = useCallback((id: string, minutes: number) => {
     const snoozeUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString();
     updateNudge(id, { status: 'snoozed', snoozedUntil: snoozeUntil });
+    dismissDelivered(id);
   }, [updateNudge]);
 
   const markNotificationRead = useCallback((id: string) => {
@@ -223,10 +400,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const receiver = people.find((p) => p.id === receiverId) || currentUser;
     const createdNudges: Nudge[] = template.items.map((item, idx) => {
-      const scheduledDate = new Date();
       const hours = Math.floor(item.scheduledTimeOffsetHours);
       const minutes = Math.round((item.scheduledTimeOffsetHours - hours) * 60);
-      scheduledDate.setHours(hours, minutes, 0, 0);
+      const scheduledDate = nextTimeOfDay(hours, minutes);
 
       return {
         id: `nudge-template-${Date.now()}-${idx}`,
@@ -237,6 +413,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         title: item.title,
         description: item.description,
         scheduledTime: scheduledDate.toISOString(),
+        dueAt: scheduledDate.toISOString(),
         repeat: item.repeat,
         reminderInterval: item.reminderInterval,
         stopWhen: 'completed',
@@ -277,8 +454,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const parts = timeStr.split(':');
         const h = parseInt(parts[0], 10) || 8;
         const m = parseInt(parts[1], 10) || 0;
-        const sched = new Date();
-        sched.setHours(h, m, 0, 0);
+        const sched = nextTimeOfDay(h, m);
 
         return {
           id: `nudge-med-${Date.now()}-${idx}`,
@@ -289,6 +465,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           title: `Take ${med.name} (${med.dosage})`,
           description: med.instructions || 'Care Cabinet medication dose',
           scheduledTime: sched.toISOString(),
+          dueAt: sched.toISOString(),
           repeat: 'daily' as const,
           reminderInterval: 15,
           stopWhen: 'completed' as const,
@@ -476,6 +653,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         medications, medicationLogs, addMedication, updateMedication, deleteMedication, logMedicationDose, refillMedication,
         themeMode, setThemeMode,
         isOnboarded, setOnboarded,
+        isAuthenticated, login, signup, logout,
+        hydrated, completeOnboarding, resetApp, refreshSchedules,
       }}
     >
       {children}

@@ -1,62 +1,55 @@
-import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
-import {
-  Nunito_400Regular,
-  Nunito_500Medium,
-  Nunito_600SemiBold,
-  Nunito_700Bold,
-} from '@expo-google-fonts/nunito';
-import {
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-  PlusJakartaSans_700Bold,
-} from '@expo-google-fonts/plus-jakarta-sans';
+import { InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 
-import { ThemeProvider } from './src/theme/ThemeContext';
-import { AppProvider } from './src/context/AppContext';
+import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
+import { AppProvider, useApp } from './src/context/AppContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
-import { COLORS } from './src/theme/tokens';
+import { AuthScreen } from './src/screens/AuthScreen';
+import { useReminderEngine } from './src/hooks/useReminderEngine';
 
-function AppInner() {
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function MainApp() {
+  useReminderEngine();
+  return <RootNavigator />;
+}
+
+function AppInner({ fontsLoaded }: { fontsLoaded: boolean }) {
+  const { hydrated, isAuthenticated } = useApp();
+  const { theme } = useTheme();
+  const ready = fontsLoaded && hydrated;
+
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+
+  if (!ready) return null;
+
   return (
     <>
-      <StatusBar style="dark" />
-      <RootNavigator />
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+      {isAuthenticated ? <MainApp /> : <AuthScreen />}
     </>
   );
 }
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    Nunito_400Regular,
-    Nunito_500Medium,
-    Nunito_600SemiBold,
-    Nunito_700Bold,
-    PlusJakartaSans_400Regular,
-    PlusJakartaSans_500Medium,
-    PlusJakartaSans_600SemiBold,
-    PlusJakartaSans_700Bold,
+    InstrumentSerif_400Regular,
+    InstrumentSerif_400Regular_Italic,
   });
-
-  if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.bg }}>
-        <ActivityIndicator size="large" color={COLORS.accent} />
-      </View>
-    );
-  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AppProvider>
           <ThemeProvider>
-            <AppInner />
+            <AppInner fontsLoaded={fontsLoaded} />
           </ThemeProvider>
         </AppProvider>
       </SafeAreaProvider>

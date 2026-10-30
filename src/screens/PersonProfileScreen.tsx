@@ -1,419 +1,220 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Alert, Platform, Linking } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
-import { Avatar } from '../components/Avatar';
-import { NudgeCard } from '../components/NudgeCard';
-import { EmptyState } from '../components/EmptyState';
+import { RELATIONSHIP_CONFIG } from '../theme/tokens';
+import { Screen } from '../ui/Screen';
+import { Button, Divider, Glass, Rise, Row, SectionTitle, Txt } from '../ui/primitives';
+import { Avatar, EmptyState, Stat, Tag } from '../ui/pieces';
+import { NudgeRow } from '../ui/NudgeRow';
 import { CheerModal } from '../components/CheerModal';
 import { calculateStreak } from '../utils/insights';
-import { getFormEmoji, isMedicationLowSupply, wasDoseTakenToday } from '../utils/medications';
-import { RELATIONSHIP_CONFIG } from '../theme/tokens';
+import { isMedicationLowSupply, wasDoseTakenToday } from '../utils/medications';
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function PersonProfileScreen({ navigation, route }: any) {
   const { personId } = route.params;
-  const {
-    people,
-    nudges,
-    history,
-    completeNudge,
-    snoozeNudge,
-    sendCheer,
-    medications,
-    logMedicationDose,
-    medicationLogs,
-  } = useApp();
+  const { people, nudges, history, completeNudge, sendCheer, medications, logMedicationDose, medicationLogs, removePerson } =
+    useApp();
   const { theme } = useTheme();
-  const { colors, spacing, typography, fonts, radius, shadows } = theme;
-  const [cheerModalVisible, setCheerModalVisible] = useState(false);
+  const { c } = theme;
+  const [cheerOpen, setCheerOpen] = useState(false);
 
   const person = people.find((p) => p.id === personId);
   if (!person) return null;
 
   const rel = person.relationship ? RELATIONSHIP_CONFIG[person.relationship] : null;
-
-  // Streak calculations
+  const tint = person.relationship ? c.relationship[person.relationship] : null;
   const streak = calculateStreak(history, nudges, personId);
 
-  // Nudges sent to this person
-  const personNudges = nudges.filter((n) => n.receiverId === personId);
-  const todayNudges = personNudges.filter((n) => {
-    const s = new Date(n.scheduledTime);
-    const today = new Date();
-    return s.toDateString() === today.toDateString() || n.repeat !== 'once';
-  });
-
-  const pendingNudges = todayNudges.filter(
-    (n) => n.status === 'pending' || n.status === 'snoozed'
+  const theirs = nudges.filter((n) => n.receiverId === personId);
+  const today = theirs.filter(
+    (n) => new Date(n.dueAt ?? n.scheduledTime).toDateString() === new Date().toDateString() || n.repeat !== 'once',
   );
-  const completedNudges = todayNudges.filter((n) => n.status === 'completed');
+  const open = today.filter((n) => n.status === 'pending' || n.status === 'snoozed');
+  const done = today.filter((n) => n.status === 'completed');
+  const meds = medications.filter((m) => m.personId === personId && m.isActive);
 
-  // Week streak — mock based on history
+  // This week, Monday first: did they finish at least one nudge that day?
   const personHistory = history.filter((h) => h.personId === personId);
-  const personMeds = medications.filter((m) => m.personId === personId);
-  const todayIdx = new Date().getDay(); // 0 = Sun
-  const weekMap = [0, 1, 2, 3, 4, 5, 6].map((dayOffset) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (todayIdx === 0 ? 6 : todayIdx - 1) + dayOffset);
-    const dateStr = date.toISOString().split('T')[0];
-    const entry = personHistory.find((h) => h.date === dateStr && h.status === 'completed');
-    return { day: WEEKDAYS[dayOffset], completed: !!entry, isFuture: date > new Date() };
+  const dow = new Date().getDay();
+  const week = WEEKDAYS.map((label, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1) + i);
+    const key = d.toISOString().split('T')[0];
+    const isToday = d.toDateString() === new Date().toDateString();
+    const hit = personHistory.some((h) => h.date === key && h.status === 'completed') || (isToday && done.length > 0);
+    return { label, hit, isToday, future: d > new Date() && !isToday };
   });
+
+  const nudgeThem = () => navigation.navigate('CreateTab', { screen: 'CreateNudge', params: { personId } });
+
+  const confirmRemove = () => {
+    const run = () => {
+      removePerson(personId);
+      navigation.goBack();
+    };
+    if (Platform.OS === 'web') return run();
+    Alert.alert(`Remove ${person.firstName}?`, 'Their nudges stay in your history.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: run },
+    ]);
+  };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 56 }}>
-        {/* Back */}
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={[styles.backBtn, { paddingHorizontal: spacing.lg, paddingTop: spacing.md }]}
-        >
-          <Text style={[{ color: colors.accent, fontSize: typography.md, fontFamily: fonts.bodyMedium }]}>← Back</Text>
-        </TouchableOpacity>
-
-        {/* Profile header */}
-        <View style={[styles.profileHeader, { paddingHorizontal: spacing.lg }]}>
-          <Avatar user={person} size={76} />
-          <View style={styles.profileInfo}>
-            <Text
-              style={[
-                styles.profileName,
-                { color: colors.text, fontSize: typography.xxl, fontFamily: fonts.headingBold },
-              ]}
-            >
-              {person.firstName}
-            </Text>
-            {rel && (
-              <Text style={[{ color: person.avatarColor, fontSize: typography.md, fontFamily: fonts.bodyMedium, marginTop: 4 }]}>
-                {rel.emoji} {rel.label}
-              </Text>
-            )}
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity
-              onPress={() => setCheerModalVisible(true)}
-              style={[
-                styles.nudgePersonBtn,
-                { backgroundColor: colors.honeyLight, borderRadius: radius.full },
-              ]}
-            >
-              <Text style={[{ color: colors.honey, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
-                🎉 Cheer
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('CreateNudge')}
-              style={[
-                styles.nudgePersonBtn,
-                { backgroundColor: colors.accentLight, borderRadius: radius.full },
-              ]}
-            >
-              <Text style={[{ color: colors.accent, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
-                + Nudge
-              </Text>
-            </TouchableOpacity>
-          </View>
+    <Screen title={person.firstName} onBack={() => navigation.goBack()}>
+      <Rise>
+        <View style={{ alignItems: 'center', paddingTop: 8 }}>
+          <Avatar user={person} size={96} />
+          <Txt v="largeTitle" style={{ marginTop: 14 }} accessibilityRole="header">
+            {person.name}
+          </Txt>
+          {rel && tint ? (
+            <View style={{ marginTop: 6, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: tint.bg }}>
+              <Txt v="caption" color={tint.fg}>
+                {rel.label}
+              </Txt>
+            </View>
+          ) : null}
+          {person.bio ? (
+            <Txt v="title2" tone="secondary" style={[theme.type.serifItalic, { marginTop: 12, textAlign: 'center', fontSize: 19 }]}>
+              “{person.bio}”
+            </Txt>
+          ) : null}
         </View>
+      </Rise>
 
-        {/* This week & Streak */}
-        <View style={[styles.sectionBox, { backgroundColor: colors.surface, borderRadius: radius.xxl, marginHorizontal: spacing.lg, ...shadows.sm }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold, marginBottom: 0 }]}>
-              THIS WEEK • {streak.currentStreak}-DAY STREAK 🔥
-            </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Insights', { personId: person.id })}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodySemibold }]}>
-                Insights →
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.weekRow}>
-            {weekMap.map((day, i) => (
-              <View key={i} style={styles.dayCol}>
-                <Text style={[styles.dayLabel, { color: colors.textTertiary, fontSize: typography.xs, fontFamily: fonts.body }]}>
-                  {day.day}
-                </Text>
-                <View
-                  style={[
-                    styles.dayDot,
-                    {
-                      backgroundColor: day.isFuture
-                        ? colors.border
-                        : day.completed
-                        ? colors.success
-                        : colors.dangerLight,
-                    },
-                  ]}
-                >
-                  {!day.isFuture && (
-                    <Text style={{ fontSize: 10, color: day.completed ? '#fff' : colors.danger }}>
-                      {day.completed ? '✓' : '–'}
-                    </Text>
-                  )}
+      <Rise index={1} style={{ flexDirection: 'row', gap: 10, marginTop: theme.space.xxl }}>
+        <Button label={`Nudge ${person.firstName}`} icon="paper-plane-outline" onPress={nudgeThem} style={{ flex: 1 }} />
+        <Button label="Cheer" icon="heart-outline" variant="glass" onPress={() => setCheerOpen(true)} />
+      </Rise>
+
+      {(person.phone || person.email) && (
+        <Rise index={1} style={{ marginTop: theme.space.md }}>
+          <Glass strong style={{ padding: 16, gap: 12 }}>
+            <Txt v="headline">Contact & Ping</Txt>
+            {person.phone ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <Txt v="footnote" tone="secondary">Phone / Contact</Txt>
+                  <Txt v="body" style={{ fontWeight: '600' }}>{person.phone}</Txt>
                 </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Button label="Ping SMS" size="sm" variant="glass" icon="chatbubble-ellipses-outline" onPress={() => Linking.openURL(`sms:${person.phone}`).catch(() => {})} />
+                  <Button label="Call" size="sm" variant="glass" icon="call-outline" onPress={() => Linking.openURL(`tel:${person.phone}`).catch(() => {})} />
+                </View>
+              </View>
+            ) : null}
+            {person.phone && person.email ? <Divider /> : null}
+            {person.email ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <Txt v="footnote" tone="secondary">Email</Txt>
+                  <Txt v="body" style={{ fontWeight: '600' }}>{person.email}</Txt>
+                </View>
+                <Button label="Email" size="sm" variant="glass" icon="mail-outline" onPress={() => Linking.openURL(`mailto:${person.email}`).catch(() => {})} />
+              </View>
+            ) : null}
+          </Glass>
+        </Rise>
+      )}
+
+      <Rise index={2} style={{ marginTop: theme.space.lg }}>
+        <Glass strong>
+          <View style={{ flexDirection: 'row' }}>
+            <Stat value={streak.currentStreak} label="day streak" />
+            <Stat value={`${streak.completionRate}%`} label="done on time" />
+            <Stat value={streak.totalCompleted} label="completed" />
+          </View>
+          <Divider />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 }}>
+            {week.map((d, i) => (
+              <View key={i} style={{ alignItems: 'center', gap: 6 }} accessibilityLabel={`${d.label}: ${d.hit ? 'done' : 'nothing done'}`}>
+                <View
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: d.hit ? c.accent : 'transparent',
+                    borderWidth: d.hit ? 0 : 1.5,
+                    borderColor: d.isToday ? c.accent : c.hairline,
+                    opacity: d.future ? 0.4 : 1,
+                  }}
+                />
+                <Txt v="caption" tone={d.isToday ? 'accent' : 'tertiary'}>
+                  {d.label}
+                </Txt>
               </View>
             ))}
           </View>
-        </View>
+        </Glass>
+      </Rise>
 
-        {/* ── Care Cabinet / Active Prescriptions ── */}
-        <View
-          style={[
-            styles.sectionBox,
-            {
-              backgroundColor: colors.surface,
-              borderRadius: radius.xxl,
-              marginHorizontal: spacing.lg,
-              marginTop: spacing.md,
-              ...shadows.sm,
-            },
-          ]}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 16 }}>💊</Text>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold, marginBottom: 0 },
-                ]}
-              >
-                CARE CABINET ({personMeds.length})
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Medications', { personId: person.id })}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodySemibold }]}>
-                Cabinet →
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {personMeds.length === 0 ? (
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Medications', { personId: person.id })}
-              style={[
-                styles.emptyMedBtn,
-                { backgroundColor: colors.surfaceWarm, borderRadius: radius.xl, padding: spacing.md },
-              ]}
-            >
-              <Text style={[{ color: colors.textSecondary, fontSize: typography.xs, fontFamily: fonts.bodyMedium, textAlign: 'center' }]}>
-                No prescriptions recorded yet. Tap to manage Care Cabinet.
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={{ gap: 8 }}>
-              {personMeds.map((med) => {
-                const isTaken = wasDoseTakenToday(med, medicationLogs);
-                const isLow = isMedicationLowSupply(med);
-                return (
-                  <View
-                    key={med.id}
-                    style={[
-                      styles.medProfileRow,
-                      {
-                        backgroundColor: colors.surfaceWarm,
-                        borderRadius: radius.xl,
-                        borderColor: isLow ? '#FED7C3' : colors.border,
-                        borderWidth: 1,
-                        padding: 10,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.medProfileIcon,
-                        {
-                          backgroundColor: med.color ? `${med.color}15` : colors.accentLight,
-                          borderRadius: radius.lg,
-                          width: 36,
-                          height: 36,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        },
-                      ]}
-                    >
-                      <Text style={{ fontSize: 18 }}>{getFormEmoji(med.form)}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[{ color: colors.text, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
-                          {med.name}
-                        </Text>
-                        <Text style={[{ color: colors.textTertiary, fontSize: 11, fontFamily: fonts.body }]}>
-                          {med.dosage}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[
-                          {
-                            color: isLow ? '#FF784B' : colors.textSecondary,
-                            fontSize: 11,
-                            fontFamily: fonts.body,
-                            marginTop: 1,
-                          },
-                        ]}
-                      >
-                        {isLow
-                          ? `⚠️ Low stock: ${med.currentSupply} ${med.unit}`
-                          : `${med.currentSupply} ${med.unit} remaining`}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => logMedicationDose(med.id, 'taken')}
-                      style={[
-                        styles.medDoseBtn,
-                        {
-                          backgroundColor: isTaken ? colors.successLight : colors.accent,
-                          borderRadius: radius.full,
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          {
-                            color: isTaken ? colors.success : '#FFFFFF',
-                            fontSize: 11,
-                            fontFamily: fonts.bodyBold,
-                          },
-                        ]}
-                      >
-                        {isTaken ? '✓ Taken' : 'Log Dose'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </View>
-
-        {/* Today's nudges */}
-        {pendingNudges.length > 0 && (
-          <View style={{ marginTop: spacing.xl }}>
-            <Text style={[styles.todayLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold, paddingHorizontal: spacing.lg, marginBottom: spacing.sm }]}>
-              TODAY — PENDING
-            </Text>
-            {pendingNudges.map((n) => (
-              <NudgeCard
-                key={n.id}
+      <SectionTitle title="Today" action="Insights" onAction={() => navigation.navigate('Insights', { personId })} />
+      {open.length === 0 && done.length === 0 ? (
+        <EmptyState icon="leaf-outline" title="Nothing for today" body={`Send ${person.firstName} a gentle nudge.`} />
+      ) : (
+        <View style={{ gap: 10 }}>
+          {[...open, ...done].map((n, i) => (
+            <Rise key={n.id} index={i}>
+              <NudgeRow
                 nudge={n}
-                person={person}
-                showPerson={false}
+                who={person}
+                direction="sent"
                 onPress={() => navigation.navigate('NudgeDetail', { nudgeId: n.id })}
-                onComplete={() => completeNudge(n.id)}
-                onSnooze={() => snoozeNudge(n.id, 15)}
+                onDone={() => completeNudge(n.id)}
               />
-            ))}
-          </View>
-        )}
+            </Rise>
+          ))}
+        </View>
+      )}
 
-        {completedNudges.length > 0 && (
-          <View style={{ marginTop: spacing.lg }}>
-            <Text style={[styles.todayLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold, paddingHorizontal: spacing.lg, marginBottom: spacing.sm }]}>
-              TODAY — DONE
-            </Text>
-            {completedNudges.map((n) => (
-              <NudgeCard
-                key={n.id}
-                nudge={n}
-                person={person}
-                showPerson={false}
-                onPress={() => navigation.navigate('NudgeDetail', { nudgeId: n.id })}
-              />
-            ))}
-          </View>
-        )}
+      {meds.length > 0 && (
+        <>
+          <SectionTitle title="Medicines" action="Cabinet" onAction={() => navigation.navigate('Medications', { personId })} />
+          <Glass style={{ paddingVertical: 4 }}>
+            {meds.map((m, i) => {
+              const taken = wasDoseTakenToday(m, medicationLogs);
+              const low = isMedicationLowSupply(m);
+              return (
+                <View key={m.id}>
+                  {i > 0 && <Divider inset={52} />}
+                  <Row
+                    icon="medkit-outline"
+                    iconTint={c.category.medicine}
+                    title={`${m.name} · ${m.dosage}`}
+                    subtitle={low ? `Running low · ${m.currentSupply} ${m.unit} left` : `${m.currentSupply} ${m.unit} left`}
+                    right={
+                      taken ? (
+                        <Tag tone="accent" icon="checkmark" label="Taken" />
+                      ) : (
+                        <Button label="Log dose" size="sm" variant="glass" onPress={() => logMedicationDose(m.id, 'taken')} />
+                      )
+                    }
+                  />
+                </View>
+              );
+            })}
+          </Glass>
+        </>
+      )}
 
-        {pendingNudges.length === 0 && completedNudges.length === 0 && (
-          <EmptyState
-            emoji="☀️"
-            title="All clear"
-            subtitle="No nudges scheduled for today."
-          />
-        )}
-      </ScrollView>
+      <Button
+        label={`Remove ${person.firstName} from circle`}
+        variant="danger"
+        size="sm"
+        onPress={confirmRemove}
+        style={{ marginTop: theme.space.xxxl, alignSelf: 'center' }}
+      />
 
-      {/* Cheer modal */}
       <CheerModal
-        visible={cheerModalVisible}
-        onClose={() => setCheerModalVisible(false)}
-        people={people}
+        visible={cheerOpen}
+        onClose={() => setCheerOpen(false)}
+        people={[person]}
         defaultPersonId={person.id}
         onSendCheer={sendCheer}
       />
-    </SafeAreaView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  backBtn: {},
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 24,
-  },
-  profileInfo: { flex: 1 },
-  profileName: {},
-  nudgePersonBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
-  sectionBox: {
-    padding: 20,
-  },
-  sectionTitle: {
-    letterSpacing: 0.5,
-    marginBottom: 16,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  dayCol: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  dayLabel: { textTransform: 'uppercase' },
-  dayDot: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  todayLabel: {
-    letterSpacing: 0.5,
-  },
-  medProfileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  medProfileIcon: {},
-  medDoseBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyMedBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

@@ -1,54 +1,45 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, TextInput } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
+import { RELATIONSHIP_CONFIG } from '../theme/tokens';
+import { Screen } from '../ui/Screen';
+import { Button, Chip, Glass, Rise, Tap, Txt, haptic } from '../ui/primitives';
+import { Avatar } from '../ui/pieces';
 import { User, RelationshipType } from '../types';
 import { generateId } from '../utils/formatters';
 
-const RELATIONSHIPS: { value: RelationshipType; label: string; emoji: string }[] = [
-  { value: 'partner', label: 'Partner', emoji: '❤️' },
-  { value: 'parent', label: 'Parent', emoji: '👨' },
-  { value: 'family', label: 'Family', emoji: '👨‍👩‍👧' },
-  { value: 'child', label: 'Child', emoji: '👶' },
-  { value: 'friend', label: 'Friend', emoji: '🤝' },
-];
+const RELATIONSHIPS: RelationshipType[] = ['partner', 'parent', 'family', 'child', 'friend'];
 
-const AVATAR_COLORS = [
-  '#C2796B', '#7BAE8E', '#9B8EC4', '#D4A85C',
-  '#7A9CC6', '#B89575', '#8E7DB8', '#6B9E7E',
-];
+// Earthy tones that read on both the misty and the forest ground.
+const AVATAR_COLORS = ['#9E5946', '#4F7F42', '#6D5FA0', '#8A6627', '#3F7398', '#8B6A55', '#3F8A78', '#A0607A'];
 
 export function AddPersonScreen({ navigation }: any) {
   const { addPerson } = useApp();
   const { theme } = useTheme();
-  const { colors, spacing, typography, fonts, radius, shadows } = theme;
+  const { c } = theme;
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState('');
-  const [relationship, setRelationship] = useState<RelationshipType>('family');
-  const [selectedColor, setSelectedColor] = useState(AVATAR_COLORS[0]);
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [bio, setBio] = useState('');
+  const [relationship, setRelationship] = useState<RelationshipType>('partner');
+  const [color, setColor] = useState(AVATAR_COLORS[0]);
 
-  const canSubmit = name.trim().length >= 1;
+  const trimmed = name.trim();
 
-  const handleAdd = async () => {
-    if (!canSubmit) return;
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 700));
-
-    const newPerson: User = {
+  const add = () => {
+    if (!trimmed) return;
+    const person: User = {
       id: generateId(),
-      name: name.trim(),
-      firstName: name.trim(),
-      avatarColor: selectedColor,
+      name: trimmed,
+      firstName: trimmed.split(' ')[0],
+      email: email.trim() || undefined,
+      phone: phone.trim() || undefined,
+      avatarColor: color,
+      bio: bio.trim() || undefined,
       relationship,
       accountabilityLevel: 'trust',
       privacy: {
@@ -68,220 +59,145 @@ export function AddPersonScreen({ navigation }: any) {
       },
       createdAt: new Date().toISOString(),
     };
-
-    addPerson(newPerson);
-    setLoading(false);
-    setSuccess(true);
-    setTimeout(() => {
-      navigation.goBack();
-    }, 1400);
+    addPerson(person);
+    haptic.success();
+    navigation.goBack();
   };
 
-  if (success) {
-    return (
-      <View style={[styles.successContainer, { backgroundColor: colors.bg }]}>
-        <Text style={{ fontSize: 56 }}>🌿</Text>
-        <Text style={[styles.successTitle, { color: colors.text, fontSize: typography.xxl, fontFamily: fonts.headingBold, marginTop: 24 }]}>
-          {name} added!
-        </Text>
-        <Text style={[{ color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body, marginTop: 10 }]}>
-          You can now create nudges for them.
-        </Text>
-      </View>
-    );
-  }
+  const field = [theme.type.body, { color: c.text, paddingHorizontal: 18, paddingVertical: 16 }];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'bottom']}>
-      <View style={[styles.navHeader, { borderBottomColor: colors.divider }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={[{ color: colors.accent, fontSize: typography.md, fontFamily: fonts.bodyMedium }]}>Cancel</Text>
-        </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.text, fontSize: typography.md, fontFamily: fonts.heading }]}>
-          Add Person
-        </Text>
-        <View style={{ width: 60 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: spacing.lg }]}>
-        {/* Avatar preview */}
-        <View style={styles.avatarPreview}>
-          <View
-            style={[
-              styles.avatarLarge,
-              { backgroundColor: selectedColor + '18', borderRadius: radius.full },
-            ]}
-          >
-            <Text style={[styles.avatarLargeText, { color: selectedColor, fontFamily: fonts.headingBold }]}>
-              {name ? name.charAt(0).toUpperCase() : '?'}
-            </Text>
-          </View>
-          <View style={styles.colorRow}>
-            {AVATAR_COLORS.map((c) => (
-              <TouchableOpacity
-                key={c}
-                onPress={() => setSelectedColor(c)}
-                style={[
-                  styles.colorDot,
-                  {
-                    backgroundColor: c,
-                    borderRadius: radius.full,
-                    borderWidth: selectedColor === c ? 3 : 0,
-                    borderColor: colors.text,
-                    transform: [{ scale: selectedColor === c ? 1.15 : 1 }],
-                  },
-                ]}
-              />
-            ))}
-          </View>
+    <Screen
+      title="Add someone"
+      onBack={() => navigation.goBack()}
+      backIcon="close"
+      keyboard
+      bottomInset={24}
+      footer={
+        <View style={{ paddingHorizontal: theme.space.xl, paddingBottom: insets.bottom + 12, paddingTop: 8 }}>
+          <Button label={trimmed ? `Add ${trimmed.split(' ')[0]}` : 'Add to circle'} icon="checkmark" disabled={!trimmed} onPress={add} />
         </View>
+      }
+    >
+      <Rise style={{ alignItems: 'center', marginTop: 8, marginBottom: theme.space.xxl }}>
+        <Avatar user={{ firstName: trimmed || '?', avatarColor: color }} size={88} />
+        <Txt v="title" style={{ marginTop: 12 }}>
+          {trimmed || 'Someone you love'}
+        </Txt>
+      </Rise>
 
-        {/* Name */}
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold }]}>
-          NAME
-        </Text>
+      <Txt v="subhead" tone="secondary" style={{ marginBottom: 8 }}>
+        Name
+      </Txt>
+      <Glass strong padded={false} radius={18}>
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="e.g. Sarah, Dad, Aarav"
-          placeholderTextColor={colors.textTertiary}
+          placeholder="Their name"
+          placeholderTextColor={c.textTertiary}
+          selectionColor={c.accent}
           autoCapitalize="words"
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.surface,
-              borderColor: name.length > 0 ? colors.accent : colors.border,
-              borderRadius: radius.xl,
-              color: colors.text,
-              fontSize: typography.lg,
-              fontFamily: fonts.body,
-            },
-          ]}
+          autoFocus
+          maxLength={40}
+          accessibilityLabel="Their name"
+          style={field}
         />
+      </Glass>
 
-        {/* Relationship */}
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary, fontSize: typography.sm, fontFamily: fonts.bodySemibold, marginTop: 24 }]}>
-          RELATIONSHIP
-        </Text>
-        <View style={styles.relGrid}>
-          {RELATIONSHIPS.map((r) => {
-            const isSelected = relationship === r.value;
-            return (
-              <TouchableOpacity
-                key={r.value}
-                onPress={() => setRelationship(r.value)}
-                style={[
-                  styles.relChip,
-                  {
-                    backgroundColor: isSelected ? colors.accentLight : colors.surface,
-                    borderRadius: radius.xl,
-                    ...shadows.sm,
-                  },
-                ]}
-              >
-                <Text style={{ fontSize: 22 }}>{r.emoji}</Text>
-                <Text style={[{ color: isSelected ? colors.accent : colors.text, fontSize: typography.sm, fontFamily: isSelected ? fonts.bodySemibold : fonts.body }]}>
-                  {r.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
+      <Txt v="subhead" tone="secondary" style={{ marginTop: theme.space.xl, marginBottom: 8 }}>
+        Email Address
+      </Txt>
+      <Glass strong padded={false} radius={18}>
+        <TextInput
+          value={email}
+          onChangeText={setEmail}
+          placeholder="partner@example.com"
+          placeholderTextColor={c.textTertiary}
+          selectionColor={c.accent}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          maxLength={80}
+          accessibilityLabel="Their email"
+          style={field}
+        />
+      </Glass>
 
-      {/* Submit */}
-      <View style={[styles.bottomBar, { paddingHorizontal: spacing.lg, backgroundColor: colors.bg }]}>
-        <TouchableOpacity
-          onPress={handleAdd}
-          disabled={!canSubmit || loading}
-          activeOpacity={0.82}
-          style={[
-            styles.submitBtn,
-            {
-              backgroundColor: canSubmit ? colors.accent : colors.border,
-              borderRadius: radius.full,
-              ...(canSubmit ? shadows.accent : {}),
-            },
-          ]}
-        >
-          <Text style={[{ color: '#fff', fontSize: typography.lg, fontFamily: fonts.bodySemibold }]}>
-            {loading ? 'Adding…' : 'Add to circle →'}
-          </Text>
-        </TouchableOpacity>
+      <Txt v="subhead" tone="secondary" style={{ marginTop: theme.space.xl, marginBottom: 8 }}>
+        Contact Number (Phone)
+      </Txt>
+      <Glass strong padded={false} radius={18}>
+        <TextInput
+          value={phone}
+          onChangeText={setPhone}
+          placeholder="+1 (555) 012-3456"
+          placeholderTextColor={c.textTertiary}
+          selectionColor={c.accent}
+          keyboardType="phone-pad"
+          maxLength={30}
+          accessibilityLabel="Their contact number"
+          style={field}
+        />
+      </Glass>
+      <Txt v="footnote" tone="tertiary" style={{ marginTop: 6, marginHorizontal: 4 }}>
+        CheckD will ping them directly with gentle reminder notifications.
+      </Txt>
+
+      <Txt v="subhead" tone="secondary" style={{ marginTop: theme.space.xl, marginBottom: 8 }}>
+        They are your
+      </Txt>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {RELATIONSHIPS.map((r) => (
+          <Chip
+            key={r}
+            label={RELATIONSHIP_CONFIG[r].label}
+            icon={RELATIONSHIP_CONFIG[r].icon}
+            selected={relationship === r}
+            onPress={() => setRelationship(r)}
+          />
+        ))}
       </View>
-    </SafeAreaView>
+
+      <Txt v="subhead" tone="secondary" style={{ marginTop: theme.space.xl, marginBottom: 8 }}>
+        Colour
+      </Txt>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+        {AVATAR_COLORS.map((col) => (
+          <Tap
+            key={col}
+            onPress={() => setColor(col)}
+            scaleTo={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={`Colour ${col}`}
+            accessibilityState={{ selected: color === col }}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              padding: 4,
+              borderWidth: 2,
+              borderColor: color === col ? c.text : 'transparent',
+            }}
+          >
+            <View style={{ flex: 1, borderRadius: 18, backgroundColor: col }} />
+          </Tap>
+        ))}
+      </View>
+
+      <Txt v="subhead" tone="secondary" style={{ marginTop: theme.space.xl, marginBottom: 8 }}>
+        A few words (optional)
+      </Txt>
+      <Glass strong padded={false} radius={18}>
+        <TextInput
+          value={bio}
+          onChangeText={setBio}
+          placeholder="My favourite person"
+          placeholderTextColor={c.textTertiary}
+          selectionColor={c.accent}
+          maxLength={80}
+          accessibilityLabel="A few words about them"
+          style={field}
+        />
+      </Glass>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  successContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  successTitle: { textAlign: 'center' },
-  navHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  navTitle: {},
-  content: {
-    paddingTop: 28,
-    paddingBottom: 40,
-  },
-  avatarPreview: {
-    alignItems: 'center',
-    marginBottom: 36,
-  },
-  avatarLarge: {
-    width: 92,
-    height: 92,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-  },
-  avatarLargeText: {
-    fontSize: 38,
-  },
-  colorRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  colorDot: {
-    width: 30,
-    height: 30,
-  },
-  fieldLabel: {
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  input: {
-    borderWidth: 1.5,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-  },
-  relGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  relChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  bottomBar: {
-    paddingVertical: 18,
-  },
-  submitBtn: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-});

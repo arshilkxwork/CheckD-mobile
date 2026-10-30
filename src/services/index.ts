@@ -7,10 +7,10 @@ import { User, Nudge, HistoryEntry, AppNotification, Medication, Cheer } from '.
 
 declare const process: { env?: Record<string, string | undefined> } | undefined;
 
-// Default to localhost on iOS/Web and 10.0.2.2 on Android Emulator
+// Default to live Vercel backend with local fallback
 export const API_BASE_URL =
   (typeof process !== 'undefined' && process?.env?.EXPO_PUBLIC_API_URL) ||
-  (Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000');
+  'https://checkd-backend.vercel.app';
 
 let authToken: string | null = null;
 
@@ -35,7 +35,7 @@ async function request<T>(
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
@@ -58,7 +58,7 @@ async function request<T>(
 // ─── Auth Service ─────────────────────────────────────────────────────────────
 
 export const authService = {
-  login: async (email: string, password: string): Promise<{ success: boolean; userId?: string; token?: string; user?: User }> => {
+  login: async (email: string, password: string): Promise<{ success: boolean; userId?: string; token?: string; user?: User; error?: string }> => {
     const res = await request<{ token: string; user: User; message: string }>('/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
@@ -66,30 +66,29 @@ export const authService = {
 
     if (res.ok && res.data) {
       setAuthToken(res.data.token);
-      return { success: true, userId: res.data.user.id, token: res.data.token, user: res.data.user };
+      return { success: true, userId: String(res.data.user.id), token: res.data.token, user: res.data.user };
     }
 
-    // Fallback for mock demo credentials if server is not reachable
-    if ((email === 'arshil@example.com' || email === 'arshil') && (password === 'password' || password === 'password123')) {
-      return { success: true, userId: '1' };
-    }
-    return { success: false };
+    return { success: false, error: res.error || 'Login failed' };
   },
 
-  signup: async (userData: { name: string; email: string; password: string; phone?: string }): Promise<{ success: boolean; user?: User }> => {
-    const res = await request<{ user: User }>('/signup', {
+  signup: async (userData: { name: string; email: string; password: string; phone?: string }): Promise<{ success: boolean; token?: string; user?: User; error?: string }> => {
+    const res = await request<{ user: User; token: string }>('/signup', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
 
     if (res.ok && res.data) {
-      return { success: true, user: res.data.user };
+      if (res.data.token) {
+        setAuthToken(res.data.token);
+      }
+      return { success: true, user: res.data.user, token: res.data.token };
     }
-    return { success: false };
+    return { success: false, error: res.error || 'Registration failed' };
   },
 
   logout: async (): Promise<void> => {
-    await request('/logout', { method: 'POST' });
+    await request('/logout', { method: 'POST' }).catch(() => {});
     setAuthToken(null);
   },
 

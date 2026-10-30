@@ -1,279 +1,125 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  SectionList,
-  StyleSheet,
-  TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useMemo, useState } from 'react';
+import { View } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../theme/ThemeContext';
-import { EmptyState } from '../components/EmptyState';
-import { formatDate, formatTime } from '../utils/formatters';
+import { CATEGORY_CONFIG } from '../theme/tokens';
+import { Screen } from '../ui/Screen';
+import { Button, Glass, IconButton, IconWell, Rise, Segmented, Txt } from '../ui/primitives';
+import { EmptyState, LinkCard } from '../ui/pieces';
 import { HistoryEntry } from '../types';
+import { formatDate, formatTime } from '../utils/formatters';
+
+type Filter = 'all' | 'completed' | 'missed';
+const PAGE = 14; // days per page
 
 export function HistoryScreen({ navigation }: any) {
-  const { history, people, currentUser } = useApp();
+  const { history } = useApp();
   const { theme } = useTheme();
-  const { colors, spacing, typography, fonts, radius, shadows } = theme;
+  const { c } = theme;
+  const [filter, setFilter] = useState<Filter>('all');
+  const [days, setDays] = useState(PAGE);
 
-  // Group by date
-  const grouped = groupByDate(history);
-  const sections = Object.keys(grouped)
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-    .map((date) => ({
-      date,
-      data: grouped[date].sort(
-        (a, b) =>
-          (b.completedAt ? new Date(b.completedAt).getTime() : 0) -
-          (a.completedAt ? new Date(a.completedAt).getTime() : 0)
-      ),
-    }));
+  const sections = useMemo(() => {
+    const byDate: Record<string, HistoryEntry[]> = {};
+    history
+      .filter((h) => filter === 'all' || h.status === filter)
+      .forEach((h) => {
+        (byDate[h.date] ??= []).push(h);
+      });
+    return Object.keys(byDate)
+      .sort((a, b) => b.localeCompare(a))
+      .map((date) => ({
+        date,
+        entries: byDate[date].sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')),
+      }));
+  }, [history, filter]);
 
-  const getPerson = (id: string) =>
-    people.find((p) => p.id === id) || currentUser;
-
-  if (history.length === 0) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-        <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-          <Text style={[styles.title, { color: colors.text, fontSize: typography.xxxl, fontFamily: fonts.headingBold }]}>
-            History
-          </Text>
-        </View>
-        <EmptyState
-          emoji="📖"
-          title="Your story starts here."
-          subtitle="Complete your first nudge to see it here."
-        />
-      </SafeAreaView>
-    );
-  }
+  const doneCount = history.filter((h) => h.status === 'completed').length;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 56 }}
-        ListHeaderComponent={
-          <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View>
-                <Text style={[styles.title, { color: colors.text, fontSize: typography.xxxl, fontFamily: fonts.headingBold }]}>
-                  History
-                </Text>
-                <Text style={[{ color: colors.textSecondary, fontSize: typography.md, fontFamily: fonts.body }]}>
-                  A record of care ❤️
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <TouchableOpacity
-                  onPress={() => navigation?.navigate('Medications')}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.insightsBtn,
-                    { backgroundColor: colors.surfaceWarm, borderRadius: radius.full, ...shadows.sm },
-                  ]}
-                  accessibilityLabel="View Care Cabinet"
-                >
-                  <Text style={{ fontSize: 16, marginRight: 6 }}>💊</Text>
-                  <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
-                    Cabinet
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => navigation?.navigate('Insights')}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.insightsBtn,
-                    { backgroundColor: colors.surfaceWarm, borderRadius: radius.full, ...shadows.sm },
-                  ]}
-                  accessibilityLabel="View Insights"
-                >
-                  <Text style={{ fontSize: 16, marginRight: 6 }}>📊</Text>
-                  <Text style={[{ color: colors.accent, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
-                    Insights
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+    <Screen
+      title="History"
+      large
+      subtitle={history.length ? `${doneCount} moments of care so far.` : undefined}
+      right={<IconButton name="stats-chart-outline" label="Insights" onPress={() => navigation.navigate('Insights')} />}
+    >
+      {history.length === 0 ? (
+        <Rise>
+          <EmptyState
+            icon="book-outline"
+            title="Your story starts here"
+            body="Every nudge that gets done is kept here, day by day."
+          />
+        </Rise>
+      ) : (
+        <>
+          <Rise style={{ flexDirection: 'row', gap: theme.space.md }}>
+            <LinkCard icon="analytics-outline" title="Insights" body="Streaks, weeks and badges" tint={c.category.water} onPress={() => navigation.navigate('Insights')} />
+            <LinkCard icon="medkit-outline" title="Care Cabinet" body="Dose logs and refills" tint={c.category.medicine} onPress={() => navigation.navigate('Medications')} />
+          </Rise>
 
-            <TouchableOpacity
-              onPress={() => navigation?.navigate('Insights')}
-              activeOpacity={0.85}
-              style={[
-                styles.insightsCallout,
-                {
-                  backgroundColor: colors.surface,
-                  borderRadius: radius.xl,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  marginTop: spacing.md,
-                  padding: spacing.md,
-                  ...shadows.sm,
-                },
+          <View style={{ marginTop: theme.space.xl }}>
+            <Segmented<Filter>
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'completed', label: 'Done' },
+                { value: 'missed', label: 'Missed' },
               ]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text style={{ fontSize: 20 }}>🔥</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={[{ color: colors.text, fontSize: typography.xs, fontFamily: fonts.bodyBold }]}>
-                    Care Continuity & Streaks
-                  </Text>
-                  <Text style={[{ color: colors.textTertiary, fontSize: 10, fontFamily: fonts.body, marginTop: 1 }]}>
-                    Review adherence rates, category breakdown & badges
-                  </Text>
-                </View>
-                <Text style={[{ color: colors.accent, fontSize: typography.sm, fontFamily: fonts.bodyBold }]}>
-                  →
-                </Text>
-              </View>
-            </TouchableOpacity>
+              value={filter}
+              onChange={setFilter}
+            />
           </View>
-        }
-        renderSectionHeader={({ section }) => (
-          <View style={[styles.sectionHeader, { paddingHorizontal: spacing.lg, backgroundColor: colors.bg }]}>
-            <Text
-              style={[
-                styles.sectionHeaderText,
-                {
-                  color: colors.textSecondary,
-                  fontSize: typography.sm,
-                  fontFamily: fonts.bodySemibold,
-                },
-              ]}
-            >
-              {formatDate(section.date).toUpperCase()}
-            </Text>
-          </View>
-        )}
-        renderItem={({ item }) => {
-          const person = getPerson(item.personId);
-          const isCompleted = item.status === 'completed';
-          return (
-            <View
-              style={[
-                styles.historyItem,
-                {
-                  backgroundColor: colors.surface,
-                  borderRadius: radius.xl,
-                  marginHorizontal: spacing.lg,
-                  marginBottom: 10,
-                  ...shadows.sm,
-                },
-              ]}
-            >
-              <View style={styles.historyLeft}>
-                <View
-                  style={[
-                    styles.statusDot,
-                    {
-                      backgroundColor: isCompleted ? colors.successLight : colors.dangerLight,
-                    },
-                  ]}
-                >
-                  <Text style={{ fontSize: 12, color: isCompleted ? colors.success : colors.danger }}>
-                    {isCompleted ? '✓' : '—'}
-                  </Text>
-                </View>
-                <View>
-                  <View style={styles.historyTopRow}>
-                    <Text style={[{ fontSize: 16, marginRight: 8 }]}>{item.nudge.emoji}</Text>
-                    <Text
-                      style={[
-                        styles.historyTitle,
-                        {
-                          color: isCompleted ? colors.text : colors.textSecondary,
-                          fontSize: typography.md,
-                          fontFamily: fonts.bodyMedium,
-                          textDecorationLine: !isCompleted ? 'line-through' : 'none',
-                          opacity: !isCompleted ? 0.7 : 1,
-                        },
-                      ]}
-                    >
-                      {item.nudge.title}
-                    </Text>
-                  </View>
-                  <Text style={[styles.historyPerson, { color: person.avatarColor, fontSize: typography.sm, fontFamily: fonts.body }]}>
-                    {person.firstName}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.historyRight}>
-                {item.completedAt ? (
-                  <Text style={[{ color: colors.textTertiary, fontSize: typography.sm, fontFamily: fonts.body }]}>
-                    {formatTime(item.completedAt)}
-                  </Text>
-                ) : (
-                  <Text style={[{ color: colors.danger, fontSize: typography.sm, fontFamily: fonts.body }]}>
-                    Not done
-                  </Text>
-                )}
-              </View>
+
+          {sections.length === 0 ? (
+            <View style={{ marginTop: theme.space.xl }}>
+              <EmptyState icon="leaf-outline" title={filter === 'missed' ? 'Nothing missed' : 'Nothing here yet'} />
             </View>
-          );
-        }}
-      />
-    </SafeAreaView>
+          ) : null}
+
+          {sections.slice(0, days).map((s, si) => (
+            <Rise key={s.date} index={si} style={{ marginTop: theme.space.xxl }}>
+              <Txt v="title2" style={{ marginBottom: theme.space.md }}>
+                {formatDate(`${s.date}T12:00:00`)}
+              </Txt>
+              <Glass style={{ paddingVertical: 6 }}>
+                {s.entries.map((h, i) => {
+                  const missed = h.status === 'missed';
+                  const cat = CATEGORY_CONFIG[h.nudge.category] ?? CATEGORY_CONFIG.custom;
+                  const tint = c.category[h.nudge.category] ?? c.category.custom;
+                  const last = i === s.entries.length - 1;
+                  return (
+                    <View key={h.id} style={{ flexDirection: 'row', gap: 14 }}>
+                      {/* the day's thread */}
+                      <View style={{ alignItems: 'center', width: 40 }}>
+                        <View style={{ width: 2, height: 12, backgroundColor: i === 0 ? 'transparent' : c.hairline }} />
+                        <IconWell name={missed ? 'remove' : cat.icon} size={36} fg={missed ? c.danger : tint.fg} bg={missed ? c.dangerSoft : tint.bg} />
+                        <View style={{ width: 2, flex: 1, backgroundColor: last ? 'transparent' : c.hairline }} />
+                      </View>
+                      <View style={{ flex: 1, paddingTop: 14, paddingBottom: 12 }}>
+                        <Txt v="callout" style={{ fontWeight: '600' }} tone={missed ? 'secondary' : 'primary'}>
+                          {h.nudge.title}
+                        </Txt>
+                        <Txt v="footnote" tone="secondary" style={{ marginTop: 2 }}>
+                          {[h.personName, missed ? 'Missed' : h.completedAt ? formatTime(h.completedAt) : null].filter(Boolean).join(' · ')}
+                        </Txt>
+                        {h.note ? (
+                          <Txt v="footnote" tone="tertiary" style={[theme.type.serifItalic, { marginTop: 4, fontSize: 15 }]}>
+                            {h.note}
+                          </Txt>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
+              </Glass>
+            </Rise>
+          ))}
+
+          {sections.length > days && (
+            <Button label="Show earlier days" variant="glass" onPress={() => setDays((d) => d + PAGE)} style={{ marginTop: theme.space.xl }} />
+          )}
+        </>
+      )}
+    </Screen>
   );
 }
-
-function groupByDate(entries: HistoryEntry[]): Record<string, HistoryEntry[]> {
-  return entries.reduce((acc, entry) => {
-    const date = entry.date;
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(entry);
-    return acc;
-  }, {} as Record<string, HistoryEntry[]>);
-}
-
-const styles = StyleSheet.create({
-  header: {
-    paddingTop: 24,
-    paddingBottom: 28,
-  },
-  title: {},
-  sectionHeader: {
-    paddingVertical: 14,
-  },
-  sectionHeaderText: {
-    letterSpacing: 0.8,
-  },
-  historyItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  historyLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    flex: 1,
-  },
-  statusDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  historyTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  historyTitle: {},
-  historyPerson: {
-    marginTop: 3,
-  },
-  historyRight: {},
-  insightsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  insightsCallout: {},
-});
